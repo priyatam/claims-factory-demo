@@ -59,3 +59,39 @@ These are the evaluation questions in `docs/requirements.md`, answered from the 
 3. **Customer inputs.** We do not have them. There is no three-year claim history, no adjuster-kept amount, and no subject-matter expert on these rows. The photos are a public set.
 
 4. **Repair cost.** We cannot say an estimate is good enough. That decision needs the dollar amount the adjuster actually kept. We do not have that number, so a wrong estimate is not being caught or saved for later training.
+
+## Appendix A. Strands evals primer
+
+Strands evals is the library that runs the exam. This repository uses four of its pieces: a case, an experiment, a task, and evaluators. A case is one photo plus the notes we already know. The experiment is the list of one hundred cases. The task is the function that shows one photo to Claude and returns the text. Each evaluator reads that text and the notes, then returns a score between 0 and 1, a pass or fail, and a short reason. The experiment collects those scores into one report.
+
+```mermaid
+flowchart LR
+  case["Case\nphoto + known notes"]
+  experiment["Experiment\n100 cases"]
+  task["Task\nask Claude"]
+  evaluators["Evaluators\nlocation, severity, false ok, dollar range"]
+  report["Evaluation report"]
+
+  case --> experiment --> task --> evaluators --> report
+```
+
+One photo is scored four times, once by each evaluator. The dollar-range evaluator is included so the number is on the report, and the report marks it as synthetic. The other three are the quality scores.
+
+```mermaid
+flowchart TB
+  photo["One case"]
+  claude["Claude's text"]
+  loc["damage_location"]
+  sev["damage_severity"]
+  fok["false_ok"]
+  dollars["synthetic_range"]
+  row["Four scores on that photo"]
+
+  photo --> claude
+  claude --> loc --> row
+  claude --> sev --> row
+  claude --> fok --> row
+  claude --> dollars --> row
+```
+
+The task is `assess_claim` in `evals/run.py`, marked with `@eval_task`. The evaluators are the classes in `evals/evaluators.py`. They do not call Claude again. They compare the text already returned with the notes on the case. The report is what `evals/reports/preprod.json` stores, and the dated summary in `evals/reports/report.md` is written from those scores.
