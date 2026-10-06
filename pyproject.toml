@@ -1,16 +1,30 @@
 [project]
 name = "vehicle-claims"
 version = "0.1.0"
+description = "Vehicle claims Strands harness on Amazon Bedrock AgentCore Runtime"
 requires-python = ">=3.12"
 dependencies = [
-  "fastapi>=0.115",
+  "bedrock-agentcore>=1.23",
+  "strands-agents>=1.0",
   "httpx>=0.27",
-  "python-multipart>=0.0.12",
-  "uvicorn>=0.32",
+  "boto3>=1.35",
 ]
 
 [dependency-groups]
-dev = ["pytest>=8"]
+# Local FastAPI UI (optional). Left out of the AgentCore code zip.
+local = [
+  "fastapi>=0.115",
+  "python-multipart>=0.0.12",
+  "uvicorn>=0.32",
+]
+# Only for deploy.py and tests on the machine running cdk.
+dev = [
+  "pytest>=8",
+  "aws-cdk-lib>=2.270",
+  "constructs>=10",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+testpaths = ["tests"]
+norecursedirs = [".venv", "cdk.out", ".build", ".*"]

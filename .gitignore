@@ -32,7 +32,6 @@ env/
 # Dependencies that deploy.py stages for the AgentCore code zip
 .build/
 **/.build/
-01-simple-strands-harness/.build/
 
 # AWS CDK and AWS SAM output
 cdk.out/

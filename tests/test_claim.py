@@ -62,6 +62,11 @@ def test_missing_plate_is_null():
     assert result["plate"]["confidence"] is None
 
 
+def test_json_after_prose():
+    text = "Partner tools returned null facts.\n\n" + json.dumps(OK) + "\n"
+    assert json_from_model(text) == OK
+
+
 def test_fenced_json():
     text = "```json\n" + json.dumps({"status": "not_a_vehicle"}) + "\n```"
     result = assessment_from_model(json_from_model(text), "c1")

@@ -20,7 +20,7 @@ def media_type(data: bytes) -> str | None:
     return None
 
 
-def _public_ip(raw: str) -> bool:
+def is_public_ip(raw: str) -> bool:
     ip = ipaddress.ip_address(raw)
     return not (
         ip.is_private
@@ -30,9 +30,6 @@ def _public_ip(raw: str) -> bool:
         or ip.is_multicast
         or ip.is_unspecified
     )
-
-
-is_public_ip = lambda raw: _public_ip(raw)
 
 
 def public_url(url: str, resolve: Callable = socket.getaddrinfo) -> bool:

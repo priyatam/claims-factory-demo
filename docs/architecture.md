@@ -74,6 +74,45 @@ Unusual inputs and operational boundaries. When the photograph or partner facts 
 5. **Partner timeout or null.** A Data Plane MCP call times out or returns null; null stays on the claim — no invented fill.
 
 
+## Security and reliability
+
+Callers authenticate with AWS Signature Version 4 (SigV4) on each request, so the harness does not depend on Cognito and does not keep long-lived tokens in the repository. AgentCore Runtime executes the harness inside a microVM, which isolates each session from other sessions and from the host, and the deployed artifact is a code zip rather than a shared container that an operator has to run and patch. The runtime Identity and Access Management (IAM) role is scoped to a single Bedrock inference profile, the one named in `deploy.py` (currently `us.anthropic.claude-sonnet-4-6`), so the process cannot call an arbitrary model.
+
+Signature Version 4 authenticates the caller. AgentCore Runtime then places that session in its own microVM. The dotted box is that isolation boundary, and inside it the harness may call only the named partner tools.
+
+```mermaid
+flowchart TB
+  caller[Caller]
+  runtime["AgentCore Runtime\nstarts one microVM per session"]
+
+  caller -->|Signature Version 4| runtime
+  runtime -->|this session only| vm1
+  runtime -->|this session only| vm2
+
+  subgraph vm1 ["Session microVM"]
+    h1[Harness]
+    t1["Fixed tools\npolicy, loss history, estimating"]
+    h1 -->|allowlist only| t1
+  end
+  subgraph vm2 ["Session microVM"]
+    h2[Harness]
+    t2["Fixed tools\npolicy, loss history, estimating"]
+    h2 -->|allowlist only| t2
+  end
+
+  h1 -->|"IAM role, one inference profile"| bedrock[Bedrock]
+  h2 -->|"IAM role, one inference profile"| bedrock
+  h1 --> cw[CloudWatch]
+  h2 --> cw
+
+  style vm1 stroke-dasharray: 6 4,stroke-width:2px
+  style vm2 stroke-dasharray: 6 4,stroke-width:2px
+```
+
+The harness does not store photographs. When a caller passes an image URL, the public-address check in `claims/images.py` refuses addresses that are not public, which keeps the runtime from fetching private or internal hosts. Adjuster review remains outside this path: the software returns a typed estimate for a person to accept or correct, and it does not authorize payment.
+
+Reliability follows from a single fixed sequence — prompt, then tools, then stop — instead of open tool routing that could wander. A partner tool that returns null leaves that null on the claim rather than filling in a guessed fact. What the platform records today is CloudWatch traces and logs from the runtime; the application itself does not yet emit its own OpenTelemetry span tree.
+
 
 ## Evaluation
 

@@ -62,7 +62,11 @@ def json_from_model(text: str) -> dict:
     if stripped.startswith("```"):
         stripped = re.sub(r"^```(?:json)?\s*", "", stripped)
         stripped = re.sub(r"\s*```$", "", stripped)
-    payload = json.loads(stripped)
+    # Tool-using agents often put a sentence before the JSON; take the first object.
+    start = stripped.find("{")
+    if start < 0:
+        raise ValueError("object required")
+    payload, _ = json.JSONDecoder().raw_decode(stripped[start:])
     if not isinstance(payload, dict):
         raise ValueError("object required")
     return payload
