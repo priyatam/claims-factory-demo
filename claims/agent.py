@@ -41,6 +41,7 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from claims.claim import empty_result
 from claims.harness import build_agent, decode_payload_image, harness_state, run_claim_with_agent
 from claims.images import fetch_image
+from claims.telemetry import configure_telemetry
 
 app = BedrockAgentCoreApp()
 _agent = None
@@ -50,6 +51,7 @@ def get_agent():
     """Build the Strands agent on first use (not at import — keeps unit tests offline)."""
     global _agent
     if _agent is None:
+        configure_telemetry()
         _agent = build_agent()
     return _agent
 

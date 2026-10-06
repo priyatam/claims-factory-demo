@@ -111,7 +111,7 @@ flowchart TB
 
 The harness does not store photographs. When a caller passes an image URL, the public-address check in `claims/images.py` refuses addresses that are not public, which keeps the runtime from fetching private or internal hosts. Adjuster review remains outside this path: the software returns a typed estimate for a person to accept or correct, and it does not authorize payment.
 
-Reliability follows from a single fixed sequence — prompt, then tools, then stop — instead of open tool routing that could wander. A partner tool that returns null leaves that null on the claim rather than filling in a guessed fact. What the platform records today is CloudWatch traces and logs from the runtime; the application itself does not yet emit its own OpenTelemetry span tree.
+Reliability follows from a single fixed sequence — prompt, then tools, then stop — instead of open tool routing that could wander. A partner tool that returns null leaves that null on the claim rather than filling in a guessed fact. The harness exports OpenTelemetry spans to the runtime collector and CloudWatch shows them on the AgentCore session.
 
 
 ## Evaluation

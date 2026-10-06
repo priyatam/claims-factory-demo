@@ -82,7 +82,7 @@ def stage() -> Path:
         (BUILD / "claims" / name).unlink(missing_ok=True)
     for junk in (BUILD / "claims").rglob("__pycache__"):
         shutil.rmtree(junk, ignore_errors=True)
-    # AgentCore EntryPoint allows at most two items; keep a one-file zip entrypoint.
+    # AgentCore EntryPoint allows at most two items: the ADOT wrapper, then this file.
     (BUILD / "agent.py").write_text(
         "from claims.agent import app\n\nif __name__ == '__main__':\n    app.run(host='0.0.0.0')\n",
         encoding="utf-8",
@@ -112,7 +112,7 @@ def build_app() -> cdk.App:
         agent_runtime_artifact=agentcore.AgentRuntimeArtifact.from_code_asset(
             path=str(stage()),
             runtime=agentcore.AgentCoreRuntime.PYTHON_3_12,
-            entrypoint=["agent.py"],
+            entrypoint=["opentelemetry-instrument", "agent.py"],
         ),
         tracing_enabled=True,
         logging_configs=[

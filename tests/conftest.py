@@ -29,3 +29,4 @@ def no_bedrock_or_anthropic(monkeypatch):
 
     monkeypatch.setattr("httpx.post", blocked_http)
     monkeypatch.setattr("httpx.Client.post", blocked_http)
+    monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
