@@ -39,6 +39,7 @@ Rules:
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
 from claims.claim import empty_result
+from claims.eval_log import record_outcome
 from claims.harness import build_agent, decode_payload_image, harness_state, run_claim_with_agent
 from claims.images import fetch_image
 from claims.telemetry import configure_telemetry
@@ -76,9 +77,13 @@ async def invoke(payload: dict):
     claim_id = payload["claim_id"] if isinstance(payload.get("claim_id"), str) else None
     image = load_image(payload)
     if image is None:
-        yield empty_result(claim_id or "unknown", "unreadable")
+        result = empty_result(claim_id or "unknown", "unreadable")
+        record_outcome(result)
+        yield result
         return
-    yield run_claim_with_agent(get_agent(), image[0], image[1], claim_id=claim_id)
+    result = run_claim_with_agent(get_agent(), image[0], image[1], claim_id=claim_id)
+    record_outcome(result)
+    yield result
 
 
 if __name__ == "__main__":

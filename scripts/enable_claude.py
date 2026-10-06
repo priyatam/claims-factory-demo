@@ -6,12 +6,12 @@ Agreements are per model. The Anthropic use-case form is once per account.
       --company "Acme" \
       --website "https://example.com" \
       --use-case "Vehicle damage photo estimating prototype" \
-      --model anthropic.claude-sonnet-5 \
-      --model anthropic.claude-opus-5-5
+      --model anthropic.claude-sonnet-4-6
 
 Needs IAM: bedrock model-agreement APIs plus aws-marketplace Subscribe/ViewSubscriptions/Unsubscribe.
-Region defaults to us-west-2. Use foundation model ids (not us. inference profiles).
-Always prints full availability JSON and Converse-smokes us.<model> unless --no-smoke.
+Region defaults to us-west-2. Pass foundation model ids (not us. inference profiles).
+Agreement AVAILABLE is not enough: this account can still get AccessDenied on Converse
+for sales-gated models (claude-sonnet-5, claude-opus-5-5). Smoke tests us.<id>.
 """
 
 from __future__ import annotations
@@ -23,11 +23,7 @@ import sys
 import boto3
 from botocore.exceptions import ClientError
 
-DEFAULT_MODELS = (
-    "anthropic.claude-sonnet-5",
-    "anthropic.claude-opus-5-5",
-    "anthropic.claude-sonnet-4-6",
-)
+DEFAULT_MODELS = ("anthropic.claude-sonnet-4-6",)
 
 
 def put_use_case(bedrock, company: str, website: str, use_case: str, industry: str) -> None:
@@ -54,13 +50,17 @@ def print_availability(availability: dict) -> None:
     print(json.dumps(availability, indent=2, default=str))
 
 
-def smoke_converse(region: str, foundation_model_id: str) -> bool:
+def inference_profile_id(foundation_model_id: str) -> str:
+    return f"us.{foundation_model_id}"
+
+
+def smoke_converse(region: str, foundation_model_id: str, runtime=None) -> bool:
     """Converse via the US inference profile; fails closed on AccessDenied."""
-    profile = f"us.{foundation_model_id}"
-    runtime = boto3.client("bedrock-runtime", region_name=region)
+    profile = inference_profile_id(foundation_model_id)
+    client = runtime or boto3.client("bedrock-runtime", region_name=region)
     print(f"smoke converse modelId={profile}")
     try:
-        resp = runtime.converse(
+        resp = client.converse(
             modelId=profile,
             messages=[{"role": "user", "content": [{"text": "Reply with exactly: ok"}]}],
             inferenceConfig={"maxTokens": 8, "temperature": 0},
@@ -72,6 +72,12 @@ def smoke_converse(region: str, foundation_model_id: str) -> bool:
         err = exc.response.get("Error", {})
         print(
             f"smoke converse FAILED {err.get('Code')}: {err.get('Message')}",
+            file=sys.stderr,
+        )
+        print(
+            "Marketplace agreement does not grant Converse. "
+            "This account can invoke us.anthropic.claude-sonnet-4-6; "
+            "sonnet-5 / opus-5-5 need AWS sales allowlist.",
             file=sys.stderr,
         )
         return False
@@ -137,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
         "--model",
         action="append",
         dest="models",
-        help="Foundation model id; repeatable. Default: sonnet-5, opus-5-5, sonnet-4-6.",
+        help="Foundation model id; repeatable. Default: anthropic.claude-sonnet-4-6.",
     )
     parser.add_argument(
         "--no-smoke",

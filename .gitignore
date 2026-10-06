@@ -46,3 +46,7 @@ cdk.context.json
 
 # Local agent task state
 .seed_task_id
+
+# Generated claim scores. The history slice stays tracked.
+evals/reports/
+evals/runtime/outcomes.jsonl
