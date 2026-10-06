@@ -1,0 +1,49 @@
+# One ignore file for every chapter. A pattern without a slash inside it matches at any
+# depth, so these rules cover subfolders too. Lock files stay tracked on purpose.
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Python build and packaging output
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Test coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local secrets
+.env
+
+# Dependencies that deploy.py stages for the AgentCore code zip
+.build/
+**/.build/
+01-simple-strands-harness/.build/
+
+# AWS CDK and AWS SAM output
+cdk.out/
+cdk.context.json
+.aws-sam/
+
+# Editor and operating system files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local agent task state
+.seed_task_id
