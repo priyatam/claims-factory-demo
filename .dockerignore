@@ -1,6 +1,0 @@
-.venv
-.git
-.pytest_cache
-tests
-docs
-**/.env
