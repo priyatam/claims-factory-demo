@@ -94,6 +94,8 @@ export POLICY_CODE_ADMIN='<code, 10 characters or fewer>'
 uv run deploy.py
 ```
 
+To preview just the page on your machine with no AWS, run `uv run python scripts/preview_page.py` and open http://127.0.0.1:8081. It serves the real page and answers a valid submit with a sample claim, so the runtime is never called. Type `preview` as the policy code, or set `POLICY_CODE_ADMIN` first.
+
 ## Costs
 
 Rough guesses at US list prices, not a quote; check current AWS pricing before relying on them. **Partner data integration (policy, loss history, estimating) is not included**: the partner tools are stubs today, and a real provider charges its own fees on top.

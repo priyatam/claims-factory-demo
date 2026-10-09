@@ -3,20 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vehicle claim</title>
+<title>Claims Factory - an agentic AI system for auto claims</title>
 <style>{{STYLE}}</style>
 </head>
 <body>
-<h1>Vehicle claim</h1>
-<p class="note">One photo, 3 MB or less. The cost is a visual range, not a settlement offer.</p>
-<form id="claim">
-  <label for="policy">Policy code</label>
-  <input id="policy" type="password" maxlength="10" autocomplete="off" required>
-  <label for="file">Photo (JPEG, PNG, or WebP)</label>
-  <input id="file" type="file" accept="image/jpeg,image/png,image/webp" required>
-  <button id="go" type="submit">Submit</button>
-</form>
-<pre id="out"></pre>
+<header>
+  <div class="bar">
+    <h1>Claims Factory</h1>
+    <p>An agentic AI system for auto claims</p>
+  </div>
+</header>
+<main>
+  <section>
+    <h2>Get a repair range from one photo.</h2>
+    <p class="note">One photo, 3 MB or less. The cost is a visual range, not a settlement offer.</p>
+  </section>
+  <form id="claim">
+    <div>
+      <label for="policy">Policy code</label>
+      <input id="policy" type="password" maxlength="10" autocomplete="off" required>
+    </div>
+    <div>
+      <label for="file">Photo (JPEG, PNG, or WebP)</label>
+      <input id="file" type="file" accept="image/jpeg,image/png,image/webp" required>
+    </div>
+    <button id="go" type="submit">Submit</button>
+  </form>
+  <pre id="out" role="status" aria-live="polite"></pre>
+</main>
 <script>{{SCRIPT}}</script>
 </body>
 </html>

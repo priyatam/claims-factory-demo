@@ -1,6 +1,22 @@
 
-body { font: 16px/1.45 system-ui, sans-serif; margin: 2rem auto; max-width: 40rem; padding: 0 1rem; }
-label { display: block; margin: 0.8rem 0 0.25rem; }
-button { margin-top: 1rem; }
-pre { white-space: pre-wrap; }
-.note { color: #444; }
+:root { --orange: #ff6a00; --black: #111; --white: #fff; --radius: 12px; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--white); color: var(--black); font: 17px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { border-bottom: 2px solid var(--black); }
+.bar, main { max-width: 42rem; margin: 0 auto; padding: 1.5rem 1.25rem; }
+h1 { display: flex; align-items: center; gap: 0.6rem; margin: 0; font-size: 1.3rem; letter-spacing: -0.01em; }
+h1::before { content: ""; width: 0.9rem; height: 0.9rem; border-radius: 3px; background: var(--orange); }
+header p { margin: 0.2rem 0 0 1.5rem; font-size: 0.95rem; opacity: 0.7; }
+main { display: grid; gap: 1.75rem; padding-top: 2.5rem; padding-bottom: 3rem; }
+h2 { margin: 0; font-size: 1.9rem; line-height: 1.15; letter-spacing: -0.02em; }
+.note { margin: 0.5rem 0 0; opacity: 0.7; }
+form { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1.25rem; }
+label { display: block; margin-bottom: 0.4rem; font-size: 0.9rem; font-weight: 700; }
+input { width: 100%; padding: 0.7rem 0.8rem; border: 2px solid var(--black); border-radius: 10px; font: inherit; background: var(--white); }
+input::file-selector-button { margin-right: 0.7rem; padding: 0.35rem 0.8rem; border: 0; border-radius: 8px; background: var(--orange); color: var(--black); font: inherit; font-weight: 700; cursor: pointer; }
+input:focus-visible, button:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
+button { grid-column: 1 / -1; padding: 0.85rem 1.25rem; border: 2px solid var(--black); border-radius: 999px; background: var(--black); color: var(--white); font: inherit; font-weight: 700; cursor: pointer; }
+button:hover { background: var(--orange); color: var(--black); }
+button:disabled { opacity: 0.5; cursor: wait; }
+pre { margin: 0; padding: 1.1rem 1.25rem; white-space: pre-wrap; font: inherit; border: 2px solid var(--black); border-left: 8px solid var(--orange); border-radius: var(--radius); }
+pre:empty { display: none; }
