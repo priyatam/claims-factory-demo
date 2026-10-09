@@ -24,7 +24,7 @@ The adjuster reviews that record outside the planes, accepts or corrects it, and
 
 The architecture holds three planes: **Control Plane**, **Execution Plane**, and **Data Plane**. Outside those bands: the adjuster (human), observability (OpenTelemetry out to CloudWatch), and a partner integration layer reached only through the MCP gateway.
 
-![Control Plane, Execution Plane, and Data Plane with partner integration](vscode-file://vscode-app/Users/facjure/git/priyatam/strands-agent-demo/docs/claims-factory.svg)
+![Control Plane, Execution Plane, and Data Plane with partner integration](claims-factory.jpg)
 
 **Control Plane** governs who may call and where traffic may go. Callers authenticate before a claim starts; credentials for the run stay off the claim. The photograph hits the public front door first — a wrong policy code, wrong type, or a body over 3 MB never reaches the agent, and a private URL is refused before it is fetched. The runtime has no public address; model, storage, and telemetry stay on private paths. Plate values are stripped before any log or span.
 
