@@ -41,6 +41,9 @@ uv sync --all-groups
 npx aws-cdk bootstrap          # once per account and Region, from this directory
 uv run deploy.py               # Omni/Transaction Search + stack (idempotent)
 uv run cli.py dataset/img/veh1.jpeg          # add --json for raw JSON
+uv run cli.py --otel-logs                    # claim record, then a summary of the last run, from the page or the CLI
+uv run cli.py --claim-id <id>                # the same for one claim; the page shows each claim's id
+uv run cli.py --otel-logs --full             # the same plus every span and log record
 uv run pytest
 npx aws-cdk destroy
 ```
@@ -48,6 +51,8 @@ npx aws-cdk destroy
 The idempotent `deploy.py` enables CloudWatch Transaction Search, deploys the AgentCore code zip with tracing, and sends application/usage logs to `/aws/vendedlogs/bedrock-agentcore/ClaimsFactoryHarness`. Local harness: `uv run python -m claims.agent`. After redeploy, GenAI Observability on that runtime shows the harness spans.
 
 **See logs / Omni:** CloudWatch (same Region) → GenAI Observability or Omni → AgentCore; Log groups → `ClaimsFactoryHarness`.
+
+**Dump a trace:** `uv run cli.py --otel-logs` prints JSON for the newest claim run, whether it came from the page or the CLI; `--claim-id <id>` does the same for one claim (the runtime tags each trace with the claim id the page shows), and says "No logs found... try again" when its spans have not arrived. It starts with `datetime`, when the run began in US Pacific time (PDT in summer, PST in winter), then the claim record, rebuilt from the model's final answer (the trace id stands in for the claim id). A `trace_summary` follows with the trace and session ids, the model id, tokens and duration, each model call (time, tokens, finish reason), and each tool called (time, status). Add `--full` for every span and every model and tool log record, with photo bytes replaced by their length. It reads CloudWatch only (`logs:GetLogEvents` and `logs:FilterLogEvents` on the runtime log group and `aws/spans`) and calls no model. The newest spans can take a minute to arrive. Treat the dump and the log groups as sensitive: the partner tools receive the licence plate the model reads, so a plate can appear in the tool log records.
 
 ## Evals
 
@@ -87,7 +92,7 @@ uv run python -m claims.localhost    # http://127.0.0.1:8080
 
 ## Public upload page
 
-`uv run deploy.py` also publishes a page on an API Gateway URL (stack output `PublicUrl`). Anyone with the URL can upload one photo of 3 MB or less with a policy code of up to 10 characters and see the result on the same page. The AgentCore runtime is called only when the code equals `POLICY_CODE_ADMIN`, and every failure shows the same apology message. Set the code in the deploy shell and keep it out of the repo; if it is unset, the page rejects every submit.
+`uv run deploy.py` also publishes a page on an API Gateway URL (stack output `PublicUrl`). Anyone with the URL can upload one photo of 3 MB or less with a policy code of up to 10 characters and see the result on the same page, in a claim record box, which includes the claim id the runtime mints and tags on the claim's trace; `uv run cli.py --claim-id <id>` reads that trace. The AgentCore runtime is called only when the code equals `POLICY_CODE_ADMIN`, and every failure shows the same apology message. Set the code in the deploy shell, or as `POLICY_CODE_ADMIN=...` in the gitignored `.env` (repo root or `claims/`), and keep it out of the repo. If neither has it, `deploy.py` prints an `ERROR` line before and after the deploy and the page rejects every submit.
 
 ```sh
 export POLICY_CODE_ADMIN='<code, 10 characters or fewer>'

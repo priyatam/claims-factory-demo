@@ -4,6 +4,9 @@
     uv run cli.py --url https://example.com/car.jpg
     uv run cli.py --state
     uv run cli.py dataset/img/veh1.jpeg --json   # raw JSON, for scripts
+    uv run cli.py --otel-logs                    # claim, then a summary of the last run (page or CLI)
+    uv run cli.py --claim-id <id>                # the same for one claim; the page and the CLI both print the id
+    uv run cli.py --otel-logs --full             # the same plus every span and log record
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from claims.claim import media_type
+from claims.telemetry import compact, fetch_trace, runtime_log_group, valid_claim_id
 
 STACK_NAME = "ClaimsFactoryHarness"
 
@@ -42,6 +46,7 @@ def invoke(client, arn: str, session_id: str, payload: dict):
     for line in response["response"].iter_lines():
         if line.startswith(b"data: "):
             yield json.loads(line[6:])
+
 
 
 def _text(value) -> str:
@@ -89,9 +94,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--url", help="public image URL")
     parser.add_argument("--state", action="store_true", help="print harness state")
     parser.add_argument("--json", action="store_true", help="print the raw JSON result")
+    parser.add_argument(
+        "--otel-logs",
+        action="store_true",
+        help="print the claim record, then a summary of the last claim run's OpenTelemetry trace, as JSON",
+    )
+    parser.add_argument("--claim-id", help="print the trace of this claim (implies --otel-logs); the page shows the id")
+    parser.add_argument("--full", action="store_true", help="with --otel-logs, print every span and log record")
     args = parser.parse_args(argv)
 
     err = Console(stderr=True)
+    if args.claim_id is not None and not valid_claim_id(args.claim_id):
+        err.print("error: --claim-id must be letters, digits, hyphens or underscores, up to 64 characters", style="bold red")
+        return 1
+
     try:
         session = boto3.Session()
         client = session.client("bedrock-agentcore")
@@ -99,6 +115,20 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         err.print(f"error: could not find the deployed runtime: {exc}", style="bold red", markup=False)
         return 1
+    if args.otel_logs or args.claim_id:
+        which = f"claim {args.claim_id}" if args.claim_id else "the last claim"
+        try:
+            with err.status(f"reading the trace of {which} from CloudWatch..."):
+                dump = fetch_trace(session.client("logs"), runtime_log_group(arn), args.claim_id)
+        except Exception as exc:
+            err.print(f"error: could not read the trace: {exc}", style="bold red", markup=False)
+            return 1
+        if dump is None:
+            err.print(f"No logs found for {which}. Spans can take a minute to arrive, so try again.", style="bold red", markup=False)
+            return 1
+        json.dump(dump if args.full else compact(dump), sys.stdout, indent=2, default=str)
+        print()
+        return 0
     session_id = str(uuid.uuid4())
 
     if args.state:

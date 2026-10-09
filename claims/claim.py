@@ -29,7 +29,7 @@ class Estimate(TypedDict):
     high: int
     currency: str
     assumptions: list[str]
-    confidence: float
+    confidence: float | None
 
 
 class ClaimResult(TypedDict):
@@ -129,7 +129,8 @@ def _estimate(raw: object) -> Estimate | None:
     currency = _text(raw.get("currency"))
     assumptions = strings(raw.get("assumptions"))
     confidence = _confidence(raw.get("confidence"))
-    if None in (low, high, currency, confidence) or not assumptions or low > high:
+    # A missing confidence stays null; it must not turn a complete estimate into an unreadable claim.
+    if None in (low, high, currency) or not assumptions or low > high:
         return None
     return {
         "low": low,

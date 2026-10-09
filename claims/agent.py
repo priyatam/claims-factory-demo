@@ -13,14 +13,30 @@ Payloads:
 
 from __future__ import annotations
 
+import json
+import logging
+import time
+import uuid
+
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
+from opentelemetry import trace
 
 from claims.claim import empty_result, fetch_image
-from claims.harness import build_agent, decode_payload_image, harness_state, run_claim_with_agent
-from claims.telemetry import configure_telemetry, record_outcome
+from claims.harness import MODEL_ID, build_agent, decode_payload_image, harness_state, run_claim_with_agent
+from claims.telemetry import (
+    SUMMARY_PREFIX,
+    configure_telemetry,
+    metrics_snapshot,
+    record_outcome,
+    run_summary,
+)
 
 app = BedrockAgentCoreApp()
 _agent = None
+_tracer = trace.get_tracer("claims")
+log = logging.getLogger("claims")
+log.setLevel(logging.INFO)
+
 
 
 def get_agent():
@@ -49,14 +65,22 @@ async def invoke(payload: dict):
         yield harness_state(get_agent())
         return
 
-    claim_id = payload["claim_id"] if isinstance(payload.get("claim_id"), str) else None
+    claim_id = payload["claim_id"] if isinstance(payload.get("claim_id"), str) else uuid.uuid4().hex
     image = load_image(payload)
     if image is None:
-        result = empty_result(claim_id or "unknown", "unreadable")
+        result = empty_result(claim_id, "unreadable")
         record_outcome(result)
         yield result
         return
-    result = run_claim_with_agent(get_agent(), image[0], image[1], claim_id=claim_id)
+    # The claim id is the correlation id: the page shows it, and `cli.py --claim-id` finds the trace by it.
+    # The log record always reaches CloudWatch with this trace's id; the span only does when the trace is sampled.
+    agent = get_agent()
+    before, started = metrics_snapshot(agent), time.monotonic()
+    with _tracer.start_as_current_span("claim", attributes={"claim_id": claim_id}):
+        log.info("claim_id=%s", claim_id)
+        result = run_claim_with_agent(agent, image[0], image[1], claim_id=claim_id)
+        summary = run_summary(claim_id, MODEL_ID, before, metrics_snapshot(agent), time.monotonic() - started)
+        log.info("%s%s", SUMMARY_PREFIX, json.dumps(summary))
     record_outcome(result)
     yield result
 

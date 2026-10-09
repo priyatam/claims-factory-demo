@@ -49,3 +49,35 @@ def test_invoke_claim(monkeypatch):
 
 def test_invoke_missing_image():
     assert asyncio.run(_chunks({}))[0]["status"] == "unreadable"
+
+
+def test_runtime_mints_a_claim_id_for_the_trace(monkeypatch):
+    seen = {}
+
+    def run(_agent, _image, _kind, claim_id=None):
+        seen["claim_id"] = claim_id
+        return {"claim_id": claim_id, "status": "ok"}
+
+    monkeypatch.setattr("claims.agent.get_agent", lambda: object())
+    monkeypatch.setattr("claims.agent.run_claim_with_agent", run)
+    payload = {"image_b64": base64.b64encode(JPEG).decode("ascii"), "media_type": "image/jpeg"}
+    result = asyncio.run(_chunks(payload))[0]
+    assert len(seen["claim_id"]) == 32 and int(seen["claim_id"], 16) >= 0
+    assert result["claim_id"] == seen["claim_id"]
+
+
+def test_each_claim_logs_its_id_and_a_summary_inside_the_trace(monkeypatch, caplog):
+    import json
+    import logging
+
+    from claims.telemetry import SUMMARY_PREFIX
+
+    monkeypatch.setattr("claims.agent.get_agent", lambda: object())
+    monkeypatch.setattr("claims.agent.run_claim_with_agent", lambda *_a, claim_id=None, **_k: {"claim_id": claim_id, "status": "ok"})
+    payload = {"image_b64": base64.b64encode(JPEG).decode("ascii"), "media_type": "image/jpeg", "claim_id": "abc123"}
+    with caplog.at_level(logging.INFO, logger="claims"):
+        asyncio.run(_chunks(payload))
+    lines = [r.getMessage() for r in caplog.records if r.name == "claims"]
+    assert "claim_id=abc123" in lines
+    summary = next(line for line in lines if line.startswith(SUMMARY_PREFIX))
+    assert json.loads(summary[len(SUMMARY_PREFIX):])["claim_id"] == "abc123"

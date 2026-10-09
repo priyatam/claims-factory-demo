@@ -38,6 +38,31 @@ def log(message: str) -> None:
     print(f"[deploy.py] {message}", file=sys.stderr, flush=True)
 
 
+def log_error(message: str) -> None:
+    print(f"[deploy.py] ERROR: {message}", file=sys.stderr, flush=True)
+
+
+def policy_code() -> str:
+    """POLICY_CODE_ADMIN from the environment, else from .env (repo root, then claims/). Empty when missing."""
+    code = os.environ.get("POLICY_CODE_ADMIN", "").strip()
+    for env_file in (ROOT / ".env", ROOT / "claims" / ".env"):
+        if code or not env_file.is_file():
+            continue
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            key, sep, value = line.strip().partition("=")
+            if sep and key.strip().removeprefix("export ").strip() == "POLICY_CODE_ADMIN":
+                code = value.strip().strip("'\"")
+    return code
+
+
+def policy_problem(code: str) -> str | None:
+    if not code:
+        return "POLICY_CODE_ADMIN is not set in the environment, .env, or claims/.env"
+    if len(code) > 10:
+        return "POLICY_CODE_ADMIN is longer than 10 characters"
+    return None
+
+
 def stage() -> Path:
     """Stage claims/ and linux/arm64 deps for the AgentCore code zip."""
     started = time.monotonic()
@@ -189,13 +214,14 @@ def _public_asset() -> Path:
 
 
 def _public_env(runtime_arn: str) -> dict[str, str]:
-    """Pass POLICY_CODE_ADMIN from the deploy shell to the page, up to 10 characters. Never print it."""
+    """Pass POLICY_CODE_ADMIN to the page from the environment or .env. Never print it."""
     env = {"RUNTIME_ARN": runtime_arn}
-    code = os.environ.get("POLICY_CODE_ADMIN", "")
-    if code and len(code) <= 10:
-        env["POLICY_CODE_ADMIN"] = code
+    code = policy_code()
+    problem = policy_problem(code)
+    if problem:
+        log_error(f"{problem}; the public page will reject every submit")
     else:
-        log("POLICY_CODE_ADMIN is unset or over 10 characters; the public page will reject every submit")
+        env["POLICY_CODE_ADMIN"] = code
     return env
 
 
@@ -264,18 +290,24 @@ def ensure_cloudwatch_omni() -> None:
 
 
 def deploy() -> None:
+    problem = policy_problem(policy_code())
+    if problem:
+        log_error(f"{problem}. The page will reject every submit; stop now and set it, or redeploy afterwards.")
     subprocess.run(
         ["npx", "--yes", "aws-cdk", "deploy", "--require-approval", "never"],
         cwd=ROOT,
         check=True,
     )
+    if problem:
+        log_error(f"{problem}. The deployed page rejects every submit until you set it and run uv run deploy.py again.")
     print(f"\nDeployed. Logs: {LOG_GROUP}")
     print("Omni / GenAI Observability: CloudWatch console (same Region). Then: uv run cli.py dataset/img/veh1.jpeg")
 
 
-# Always prepare Omni before synth or deploy. cdk invoke sets CDK_OUTDIR and only synths.
-ensure_cloudwatch_omni()
-if os.environ.get("CDK_OUTDIR"):
-    build_app().synth()
-else:
-    deploy()
+if __name__ == "__main__":
+    # Always prepare Omni before synth or deploy. cdk invoke sets CDK_OUTDIR and only synths.
+    ensure_cloudwatch_omni()
+    if os.environ.get("CDK_OUTDIR"):
+        build_app().synth()
+    else:
+        deploy()

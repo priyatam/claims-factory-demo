@@ -18,5 +18,12 @@ input:focus-visible, button:focus-visible { outline: 3px solid var(--orange); ou
 button { grid-column: 1 / -1; padding: 0.85rem 1.25rem; border: 2px solid var(--black); border-radius: 999px; background: var(--black); color: var(--white); font: inherit; font-weight: 700; cursor: pointer; }
 button:hover { background: var(--orange); color: var(--black); }
 button:disabled { opacity: 0.5; cursor: wait; }
-pre { margin: 0; padding: 1.1rem 1.25rem; white-space: pre-wrap; font: inherit; border: 2px solid var(--black); border-left: 8px solid var(--orange); border-radius: var(--radius); }
-pre:empty { display: none; }
+#status { margin: 0; font-weight: 700; }
+#status:empty { display: none; }
+.box { padding: 1.1rem 1.25rem; border: 2px solid var(--black); border-radius: var(--radius); }
+.box[hidden] { display: none; }
+.record { border-left: 8px solid var(--orange); }
+h3 { margin: 0 0 0.7rem; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1.25rem; margin: 0; }
+dt { font-weight: 700; }
+dd { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }

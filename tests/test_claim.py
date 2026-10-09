@@ -138,3 +138,17 @@ def test_fetch_rejects_oversized_and_non_images():
         return SimpleNamespace(status_code=200, content=b"hello", url=url)
 
     assert fetch_image("https://example.com/a.txt", get=text, resolve=resolve) is None
+
+
+def test_estimate_without_a_confidence_is_still_a_priced_claim():
+    estimate = {k: v for k, v in OK["estimate"].items() if k != "confidence"}
+    result = assessment_from_model({**OK, "estimate": estimate}, "c1")
+    assert result["status"] == "ok"
+    assert result["estimate"]["confidence"] is None
+    assert result["estimate"]["low"] == OK["estimate"]["low"]
+
+
+def test_estimate_still_needs_a_range_currency_and_assumptions():
+    for missing in ("low", "high", "currency", "assumptions"):
+        estimate = {k: v for k, v in OK["estimate"].items() if k != missing}
+        assert assessment_from_model({**OK, "estimate": estimate}, "c1")["status"] == "unreadable"

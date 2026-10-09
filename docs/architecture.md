@@ -82,7 +82,7 @@ flowchart TB
 
 
 
-The public upload page is the one unauthenticated entry point. API Gateway, throttled to one request per second with a burst of two, invokes a small Lambda that serves the form and accepts one photo of 3 MB or less (checked by size and image header) with a policy code of up to 10 characters; only a constant-time match with `POLICY_CODE_ADMIN` lets it call the runtime, through a role that can invoke that one runtime. Every failure returns the same message, results render as text under a strict content security policy, and neither the code nor the photo is logged or stored.
+The public upload page is the one unauthenticated entry point. API Gateway, throttled to one request per second with a burst of two, invokes a small Lambda that serves the form and accepts one photo of 3 MB or less (checked by size and image header) with a policy code of up to 10 characters; only a constant-time match with `POLICY_CODE_ADMIN` lets it call the runtime, through a role that can invoke that one runtime. Every failure returns the same message, results render as text under a strict content security policy, and neither the code nor the photo is logged or stored. The runtime mints a claim id and tags the claim's span with it; the page shows the id with the claim record, and `cli.py --claim-id` reads that claim's trace from CloudWatch.
 
 The harness does not store photographs. When a caller passes an image URL, the public-address check in `claims/claim.py` refuses addresses that are not public, which keeps the runtime from fetching private or internal hosts. Adjuster review remains outside this path: the software returns a typed estimate for a person to accept or correct, and it does not authorize payment.
 

@@ -18,9 +18,13 @@ os.environ.setdefault("POLICY_CODE_ADMIN", "preview")
 from claims.public import handler  # noqa: E402
 
 SAMPLE = {
+    "claim_id": "a" * 32,
     "status": "ok",
-    "damage": {"summary": "front bumper dent with scratching", "severity": "moderate"},
-    "estimate": {"low": 900, "high": 1300, "currency": "USD", "confidence": 0.8},
+    "vehicle": {"make": "Honda", "model": "Civic", "colour": "blue", "confidence": 0.8},
+    "plate": {"value": None, "confidence": None},
+    "damage": {"summary": "front bumper dent with scratching", "parts": ["bumper"], "severity": "moderate"},
+    "estimate": {"low": 900, "high": 1300, "currency": "USD", "assumptions": ["visual only"], "confidence": 0.8},
+    "partner_facts": {"policy": None, "loss_history": None, "estimating": None},
 }
 
 

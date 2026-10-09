@@ -21,7 +21,7 @@
   <form id="claim">
     <div>
       <label for="policy">Policy code</label>
-      <input id="policy" type="password" maxlength="10" autocomplete="off" required>
+      <input id="policy" type="text" maxlength="10" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required>
     </div>
     <div>
       <label for="file">Photo (JPEG, PNG, or WebP)</label>
@@ -29,7 +29,11 @@
     </div>
     <button id="go" type="submit">Submit</button>
   </form>
-  <pre id="out" role="status" aria-live="polite"></pre>
+  <p id="status" role="status" aria-live="polite"></p>
+  <section id="record" class="box record" hidden>
+    <h3>Claim record</h3>
+    <dl id="record-list"></dl>
+  </section>
 </main>
 <script>{{SCRIPT}}</script>
 </body>
