@@ -68,9 +68,9 @@
   <text class="s" x="716" y="178" text-anchor="middle">Amazon RDS, CloudWatch</text>
 
   <rect class="net" x="856" y="66" width="248" height="164" rx="8"/>
-  <text class="h" x="980" y="118" text-anchor="middle">WAF, API Gateway</text>
+  <text class="h" x="980" y="118" text-anchor="middle">API Gateway + Lambda</text>
   <text class="s" x="980" y="146" text-anchor="middle">only public front door</text>
-  <text class="s" x="980" y="166" text-anchor="middle">TLS, private URL refused</text>
+  <text class="s" x="980" y="166" text-anchor="middle">TLS, throttled, policy code</text>
 
   <!-- User outside planes, right of API Gateway -->
   <path class="req" d="M1266 148 H1104"/>

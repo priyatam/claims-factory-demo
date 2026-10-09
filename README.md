@@ -80,8 +80,14 @@ Each phase also runs on its own; the design of each is linked.
 ```sh
 uv sync --all-groups
 export ANTHROPIC_API_KEY=your-key
-export CLAIMS_FACTORY_POLICY=1234567890   # any 10 digits; not a real policy
 uv run python -m claims.web    # http://127.0.0.1:8080
 ```
 
-The form asks for that 10-digit code before it calls the model. `uv run deploy.py` also publishes the same check on a public API Gateway URL (stack output `PublicUrl`). Set `CLAIMS_FACTORY_POLICY` in the environment before deploy. The page invokes the AgentCore runtime only after the code matches. There is no Cognito login.
+## Public upload page
+
+`uv run deploy.py` also publishes a page on an API Gateway URL (stack output `PublicUrl`). Anyone with the URL can upload one photo of 3 MB or less with a policy code of up to 10 characters and see the result on the same page. The AgentCore runtime is called only when the code equals `POLICY_CODE_ADMIN`, and every failure shows the same apology message. Set the code in the deploy shell and keep it out of the repo; if it is unset, the page rejects every submit.
+
+```sh
+export POLICY_CODE_ADMIN='<code, 10 characters or fewer>'
+uv run deploy.py
+```

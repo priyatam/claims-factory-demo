@@ -18,7 +18,7 @@ An agentic process turns one photograph of a damaged vehicle into a structured e
 
 The solution is a lite 'factory' of agents running in a custom, secure harness, running on AWS optimized Agent infrastructure and Bedrock for Model inference and fine tuning. A harness is the loop around  agent(s) with evals, guardrails, memory, prompts, tools, and a stop condition. A factory runs that harness the same way on every claim, optimizing the loop for the quality of the estimate. Quality is one loop: update the harness from past claims history before production, score accuracy on realtime claims, and collect live labels for scheduled retrain.
 
-The submitter sends one photograph of the damaged vehicle — upload or URL. The photograph enters through WAF and API Gateway into one AgentCore Runtime, where Strands runs triage, read, and validation against Bedrock and fetches partner facts over MCP through AgentCore Gateway. Control Plane admits the request; Execution Plane turns it into a typed estimate: identity, damage summary, and a rough low/high when status is ok. Data Plane holds the claim and reaches partners for facts the photograph cannot supply. The claim lands in Amazon RDS, the photo is removed from S3 after the run. 
+The submitter sends one photograph of the damaged vehicle: the public page takes an upload with a policy code, and the command-line client can also send a URL. The photograph enters through API Gateway and a small Lambda into one AgentCore Runtime, where Strands runs triage, read, and validation against Bedrock and fetches partner facts over MCP through AgentCore Gateway. Control Plane admits the request; Execution Plane turns it into a typed estimate: identity, damage summary, and a rough low/high when status is ok. Data Plane holds the claim and reaches partners for facts the photograph cannot supply. The claim lands in Amazon RDS, the photo is removed from S3 after the run. 
 
 The adjuster reviews that record outside the planes, accepts or corrects it, and the kept pair joins claim history. When the harness returns an empty claim, the estimate stays null — nothing invented for the desk.
 
@@ -26,7 +26,7 @@ The architecture holds three planes: **Control Plane**, **Execution Plane**, and
 
 ![Control Plane, Execution Plane, and Data Plane with partner integration](vscode-file://vscode-app/Users/facjure/git/priyatam/strands-agent-demo/docs/claims-factory.svg)
 
-**Control Plane** governs who may call and where traffic may go. Callers authenticate before a claim starts; credentials for the run stay off the claim. The photograph hits the public front door first — wrong type, oversized body, or private URL never reaches the agent. The runtime has no public address; model, storage, and telemetry stay on private paths. Plate values are stripped before any log or span.
+**Control Plane** governs who may call and where traffic may go. Callers authenticate before a claim starts; credentials for the run stay off the claim. The photograph hits the public front door first — a wrong policy code, wrong type, or a body over 3 MB never reaches the agent, and a private URL is refused before it is fetched. The runtime has no public address; model, storage, and telemetry stay on private paths. Plate values are stripped before any log or span.
 
 **Execution Plane** runs one claim to a typed estimate. One AgentCore Runtime microVM wraps Strands and the vision model: triage, read, then validation against partner facts. When the photo is not a vehicle or cannot be read, triage writes `not_a_vehicle` or `unreadable` with a null estimate. The typed record leaves to the adjuster outside the planes, who accepts or corrects; that pair joins claim history for evals.
 
@@ -81,6 +81,8 @@ flowchart TB
 ```
 
 
+
+The public upload page is the one unauthenticated entry point. API Gateway, throttled to one request per second with a burst of two, invokes a small Lambda that serves the form and accepts one photo of 3 MB or less (checked by size and image header) with a policy code of up to 10 characters; only a constant-time match with `POLICY_CODE_ADMIN` lets it call the runtime, through a role that can invoke that one runtime. Every failure returns the same message, results render as text under a strict content security policy, and neither the code nor the photo is logged or stored.
 
 The harness does not store photographs. When a caller passes an image URL, the public-address check in `claims/images.py` refuses addresses that are not public, which keeps the runtime from fetching private or internal hosts. Adjuster review remains outside this path: the software returns a typed estimate for a person to accept or correct, and it does not authorize payment.
 

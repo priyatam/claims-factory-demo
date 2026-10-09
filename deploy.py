@@ -18,10 +18,13 @@ import time
 from pathlib import Path
 
 import aws_cdk as cdk
-from aws_cdk import RemovalPolicy
+from aws_cdk import Duration, RemovalPolicy
+from aws_cdk import aws_apigatewayv2 as apigwv2
 from aws_cdk import aws_bedrockagentcore as agentcore
 from aws_cdk import aws_iam as iam
+from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_logs as logs
+from aws_cdk.aws_apigatewayv2_integrations import HttpLambdaIntegration
 
 ROOT = Path(__file__).parent
 BUILD = ROOT / ".build"
@@ -138,9 +141,60 @@ def build_app() -> cdk.App:
         )
     )
 
+    page = lambda_.Function(
+        stack,
+        "PublicPage",
+        runtime=lambda_.Runtime.PYTHON_3_12,
+        handler="claims.public.handler",
+        code=lambda_.Code.from_asset(str(_public_asset())),
+        timeout=Duration.seconds(60),
+        memory_size=256,
+        environment=_public_env(runtime.agent_runtime_arn),
+    )
+    page.add_to_role_policy(
+        iam.PolicyStatement(
+            actions=["bedrock-agentcore:InvokeAgentRuntime"],
+            resources=[runtime.agent_runtime_arn, f"{runtime.agent_runtime_arn}/runtime-endpoint/*"],
+        )
+    )
+    http_api = apigwv2.HttpApi(
+        stack,
+        "PublicHttp",
+        default_integration=HttpLambdaIntegration("PublicPage", page),
+    )
+    default_stage = http_api.default_stage.node.default_child
+    default_stage.default_route_settings = apigwv2.CfnStage.RouteSettingsProperty(
+        throttling_rate_limit=1,
+        throttling_burst_limit=2,
+    )
+
     cdk.CfnOutput(stack, "RuntimeArn", value=runtime.agent_runtime_arn)
     cdk.CfnOutput(stack, "LogGroupName", value=log_group.log_group_name)
+    cdk.CfnOutput(stack, "PublicUrl", value=http_api.url or "")
     return app
+
+
+def _public_asset() -> Path:
+    """Zip only the public page and the policy check. The Lambda runtime already has boto3."""
+    dest = ROOT / ".public"
+    package = dest / "claims"
+    shutil.rmtree(dest, ignore_errors=True)
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    for name in ("public.py", "gate.py"):
+        shutil.copy(ROOT / "claims" / name, package / name)
+    return dest
+
+
+def _public_env(runtime_arn: str) -> dict[str, str]:
+    """Pass POLICY_CODE_ADMIN from the deploy shell to the page, up to 10 characters. Never print it."""
+    env = {"RUNTIME_ARN": runtime_arn}
+    code = os.environ.get("POLICY_CODE_ADMIN", "")
+    if code and len(code) <= 10:
+        env["POLICY_CODE_ADMIN"] = code
+    else:
+        log("POLICY_CODE_ADMIN is unset or over 10 characters; the public page will reject every submit")
+    return env
 
 
 def ensure_cloudwatch_omni() -> None:
