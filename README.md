@@ -8,7 +8,7 @@ Documentation:
 - [Architecture](docs/architecture.md)
 - [MIT License](LICENSE)
 
-![Claims factory](docs/claims-factory.svg)
+![Claims factory](docs/claims-factory.jpg)
 
 ## Prerequisites
 
