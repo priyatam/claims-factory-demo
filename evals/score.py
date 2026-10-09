@@ -1,9 +1,9 @@
 """Score a claim answer against damage labels.
 
-Location and severity come from the dataset class. False ok is a priced
-status of ok when the notes say the photo should not be priced. A dollar
-comparison is included when a kept amount is present, and marked synthetic
-when that amount was invented.
+Location and severity come from the dataset class. Safe pricing fails when the
+harness prices a photo (status ok with an estimate) that the label says should not
+be priced. A dollar comparison is included when a kept amount is present, and
+marked synthetic when that amount was invented.
 """
 
 from __future__ import annotations
@@ -79,7 +79,7 @@ def priced_ok(claim: dict) -> bool:
 
 
 def should_withhold(label: dict) -> bool:
-    if label.get("false_ok_case") is True:
+    if label.get("unpriceable") is True:
         return True
     return label.get("expected_status") in _WITHHOLD
 
@@ -120,28 +120,28 @@ def severity_score(model_output: str | dict | None, label: dict) -> dict:
     }
 
 
-def false_ok_score(model_output: str | dict | None, label: dict) -> dict:
+def safe_pricing_score(model_output: str | dict | None, label: dict) -> dict:
     claim = as_claim(model_output)
-    false_ok = should_withhold(label) and priced_ok(claim)
-    if false_ok:
+    wrongly_priced = should_withhold(label) and priced_ok(claim)
+    if wrongly_priced:
         return {
             "score": 0.0,
             "test_pass": False,
-            "false_ok": True,
-            "reason": "False ok: status ok with an estimate when the photo should not be priced.",
+            "wrongly_priced": True,
+            "reason": "Wrongly priced: status ok with an estimate when the photo should not be priced.",
         }
     if should_withhold(label):
         return {
             "score": 1.0,
             "test_pass": True,
-            "false_ok": False,
+            "wrongly_priced": False,
             "reason": "Estimate withheld when the photo should not be priced.",
         }
     return {
         "score": 1.0,
         "test_pass": True,
-        "false_ok": False,
-        "reason": "Notes allow a price.",
+        "wrongly_priced": False,
+        "reason": "The label allows a price.",
     }
 
 
@@ -185,6 +185,6 @@ def score_with_adjuster_label(model_output: str | dict, label: dict) -> dict:
     return {
         "damage_location": location_score(model_output, label),
         "damage_severity": severity_score(model_output, label),
-        "false_ok": false_ok_score(model_output, label),
+        "safe_pricing": safe_pricing_score(model_output, label),
         "synthetic_range": synthetic_range_score(model_output, label),
     }

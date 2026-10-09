@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-HISTORY = Path(__file__).resolve().parents[1] / "evals" / "history"
+HISTORY = Path(__file__).resolve().parents[1] / "dataset" / "history"
 CLAIMS = HISTORY / "claims.jsonl"
 IMAGES = HISTORY / "images"
 

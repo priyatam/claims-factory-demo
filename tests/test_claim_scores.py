@@ -8,8 +8,8 @@ from pathlib import Path
 from strands_evals.types.evaluation import EvaluationData
 
 from claims.agent import invoke
-from evals.evaluators import DamageLocationEvaluator, DamageSeverityEvaluator, FalseOkEvaluator, SyntheticRangeEvaluator
-from evals.run import experiment_from, load_claims, main, write_report
+from evals.evaluators import DamageLocationEvaluator, DamageSeverityEvaluator, SafePricingEvaluator, SyntheticRangeEvaluator
+from evals.phases.preprod import experiment_from, load_claims, main, write_report
 from evals.score import kept_inside_agent_range, score_with_adjuster_label
 
 JPEG = b"\xff\xd8\xff" + b"\x00" * 8
@@ -51,12 +51,12 @@ def test_damage_severity_match():
     assert DamageSeverityEvaluator().evaluate(_data(REAR_SEVERE, severe))[0].score == 1.0
 
 
-def test_false_ok_when_notes_say_not_to_price():
-    withhold = {"parts": ["front"], "severity": "moderate", "expected_status": "unreadable", "false_ok_case": True}
-    priced = FalseOkEvaluator().evaluate(_data(FRONT_MODERATE, withhold))[0]
-    held = FalseOkEvaluator().evaluate(_data(WITHHELD, withhold))[0]
+def test_wrongly_priced_when_label_says_not_to_price():
+    withhold = {"parts": ["front"], "severity": "moderate", "expected_status": "unreadable", "unpriceable": True}
+    priced = SafePricingEvaluator().evaluate(_data(FRONT_MODERATE, withhold))[0]
+    held = SafePricingEvaluator().evaluate(_data(WITHHELD, withhold))[0]
     assert priced.score == 0.0 and priced.test_pass is False
-    assert "False ok" in priced.reason
+    assert "Wrongly priced" in priced.reason
     assert held.score == 1.0 and held.test_pass is True
 
 
@@ -92,7 +92,7 @@ def test_later_adjuster_label_scores_a_stored_claim():
     )
     assert scores["damage_location"]["score"] == 1.0
     assert scores["damage_severity"]["score"] == 0.0
-    assert scores["false_ok"]["false_ok"] is True
+    assert scores["safe_pricing"]["wrongly_priced"] is True
     assert scores["synthetic_range"]["synthetic"] is False
 
 
@@ -101,7 +101,7 @@ def test_preprod_experiment_uses_damage_labels():
     assert [evaluator.get_name() for evaluator in experiment.evaluators] == [
         "damage_location",
         "damage_severity",
-        "false_ok",
+        "safe_pricing",
         "synthetic_range",
     ]
     assert len(experiment.cases) == 100

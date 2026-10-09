@@ -1,9 +1,10 @@
-"""Score Claude's claim answers on the held-out photographs.
+"""Score the harness on the evaluation set (dataset/history).
 
-    uv run python evals/run.py --live
+    uv run python evals/phases/preprod.py --live
 
-Runs the harness on each photo, scores the answer with Strands evaluators, and
-writes evals/reports/preprod.json. This does not retrain Claude.
+Runs each photo through the harness, scores the answer with Strands evaluators and an
+LLM judge, and writes .runtime/reports/preprod.json and report.md. Saved answers in
+.runtime/reports/task_results are reused unless --refresh is passed. Does not retrain Claude.
 """
 
 from __future__ import annotations
@@ -16,23 +17,25 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-_ROOT = Path(__file__).resolve().parent.parent
+_ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from strands_evals import Case, Experiment, eval_task
+from strands_evals import Case, Experiment, LocalFileTaskResultStore, eval_task
 
-from evals.evaluators import claim_evaluators
+from evals.paths import PREPROD, PREPROD_HISTORY, TASK_RESULTS
+from evals.evaluators import claim_evaluators, output_judge
+from evals.telemetry import configure_evals_telemetry
 
-HISTORY = Path(__file__).resolve().parent / "history"
+HISTORY = _ROOT / "dataset" / "history"
 CLAIMS = HISTORY / "claims.jsonl"
 IMAGES = HISTORY / "images"
-REPORT = Path(__file__).resolve().parent / "reports" / "preprod.json"
-HISTORY_REPORT = Path(__file__).resolve().parent / "reports" / "report.md"
+REPORT = PREPROD
+HISTORY_REPORT = PREPROD_HISTORY
 
-QUALITY = ("damage_location", "damage_severity", "false_ok")
+QUALITY = ("damage_location", "damage_severity", "safe_pricing")
 SYNTHETIC_FIELDS = {
-    "kept_dollars": "Invented by evals/fetch_history.py. Not an adjuster's kept amount.",
+    "kept_dollars": "Invented by dataset/fetch_history.py. Not an adjuster's kept amount.",
     "estimate_low": "Invented band on the history row. Not an adjuster range.",
     "estimate_high": "Invented band on the history row. Not an adjuster range.",
 }
@@ -53,7 +56,7 @@ def label_from_row(row: dict) -> dict:
         "damage_summary": row["damage_summary"],
         "dataset_label": row["dataset_label"],
         "expected_status": row["expected_status"],
-        "false_ok_case": row["false_ok_case"],
+        "unpriceable": row["unpriceable"],
         "kept_dollars": row["kept_dollars"],
         "dollars_synthetic": True,
     }
@@ -72,8 +75,18 @@ def case_from(row: dict) -> Case:
     )
 
 
-def experiment_from(rows: list[dict]) -> Experiment:
-    return Experiment[dict, dict](cases=[case_from(row) for row in rows], evaluators=claim_evaluators())
+def experiment_from(rows: list[dict], *, judge: bool = False) -> Experiment:
+    evaluators = [*claim_evaluators(), output_judge()] if judge else claim_evaluators()
+    return Experiment[dict, dict](cases=[case_from(row) for row in rows], evaluators=evaluators)
+
+
+def task_results_store(refresh: bool = False, root: Path | None = None) -> LocalFileTaskResultStore:
+    """Saved Claude answers, one JSON file per claim. --refresh drops them first."""
+    directory = root or TASK_RESULTS
+    if refresh and directory.exists():
+        for path in directory.glob("*.json"):
+            path.unlink()
+    return LocalFileTaskResultStore(directory)
 
 
 def jpeg_ok(path: Path) -> bool:
@@ -103,8 +116,16 @@ def offline_score(rows: list[dict]) -> dict:
     }
 
 
-def _log(message: str) -> None:
+def _print(message: str) -> None:
     print(message, flush=True)
+
+
+# Progress lines go through LOG so evals/e2e.py can swap in a progress bar.
+LOG = _print
+
+
+def _log(message: str) -> None:
+    LOG(message)
 
 
 _count_lock = threading.Lock()
@@ -165,7 +186,7 @@ def report_document(report: dict) -> dict:
     return {
         "retrains_claude": False,
         "scored": "Claude's text from the claims harness on each photograph",
-        "quality_note": "quality is damage location, severity, and false ok. synthetic_range uses invented dollars and stays out of quality.",
+        "quality_note": "quality is damage location, severity, and safe pricing. synthetic_range uses invented dollars and stays out of quality.",
         "identity": "Make, model, and colour are unlabeled, so identity is not scored.",
         "quality": {name: rates[name] for name in QUALITY if name in rates},
         "synthetic_fields": SYNTHETIC_FIELDS,
@@ -181,7 +202,7 @@ def history_entry(document: dict, when: datetime) -> str:
         break
     location = document["quality"].get("damage_location", {})
     severity = document["quality"].get("damage_severity", {})
-    false_ok = document["quality"].get("false_ok", {})
+    safe_pricing = document["quality"].get("safe_pricing", {})
     dollars = document.get("synthetic_range") or {}
     stamp = when.strftime("%Y-%m-%d %H:%M")
     return "\n".join(
@@ -192,7 +213,7 @@ def history_entry(document: dict, when: datetime) -> str:
             "",
             f"1. Damage location: {location.get('mean', 0):.2f}. Claude named front or rear correctly on about {round(location.get('mean', 0) * count)} of {count} photos.",
             f"2. Damage severity: {severity.get('mean', 0):.2f}. Claude matched breakage versus crushed on about {round(severity.get('mean', 0) * count)} of {count} photos.",
-            f"3. False ok: {false_ok.get('mean', 0):.2f}. Claude did not invent a price when the notes said not to.",
+            f"3. Safe pricing: {safe_pricing.get('mean', 0):.2f}. Claude did not price a photo that should not be priced.",
             f"4. Dollar range: {dollars.get('mean', 0):.2f}. Claude’s low-to-high covered the invented amount on about {round(dollars.get('mean', 0) * count)} photos. This is not a quality grade.",
             "",
         ]
@@ -219,18 +240,32 @@ def write_report(report, path: Path = REPORT) -> Path:
     return path
 
 
-def run_live(rows: list[dict], path: Path = REPORT, workers: int = 100) -> Path:
+def run_live(
+    rows: list[dict],
+    path: Path = REPORT,
+    workers: int = 100,
+    refresh: bool = False,
+    history: bool = True,
+) -> Path:
+    configure_evals_telemetry()
     assess_claim.n = 0
     assess_claim.total = len(rows)
+    store = task_results_store(refresh=refresh)
+    if refresh:
+        _log("Ignoring saved answers and calling Claude again.")
+    else:
+        _log(f"Reusing saved answers from {TASK_RESULTS} when a photo was already scored.")
     _log(f"Starting {len(rows)} photos, {workers} at a time. The score file is written at the end.")
     report = asyncio.run(
-        experiment_from(rows).run_evaluations_async(assess_claim, max_workers=workers)
+        experiment_from(rows, judge=True).run_evaluations_async(
+            assess_claim, max_workers=workers, evaluation_data_store=store
+        )
     )
     saved = write_report(report, path)
     document = report_document(report.to_dict())
-    history = append_history_report(document)
     _log(f"Wrote {saved}")
-    _log(f"Appended {history}")
+    if history:
+        _log(f"Appended {append_history_report(document)}")
     for name, rate in document["quality"].items():
         _log(f"score {name}: {rate['mean']:.2f} across {rate['count']} photos")
     if document.get("synthetic_range"):
@@ -244,15 +279,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--live",
         action="store_true",
-        help="Run the harness on each photo and write evals/reports/preprod.json.",
+        help="Run the harness on each photo and write .runtime/reports/preprod.json.",
     )
     parser.add_argument("--workers", type=int, default=100, help="How many photos to send to Claude at once.")
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Ignore saved Claude answers in .runtime/reports/task_results and call Claude again.",
+    )
     args = parser.parse_args(argv)
     if not args.live:
-        print("Score Claude's answers with: python evals/run.py --live")
-        print("The report is written to evals/reports/preprod.json. This does not retrain Claude.")
+        print("Score Claude's answers with: python evals/phases/preprod.py --live")
+        print("The report is written to .runtime/reports/preprod.json. This does not retrain Claude.")
+        print("A second --live reuses .runtime/reports/task_results. Pass --refresh to call Claude again.")
         return 0
-    path = run_live(load_claims(), workers=max(1, args.workers))
+    path = run_live(load_claims(), workers=max(1, args.workers), refresh=args.refresh)
     _log(f"Done. Report: {path}")
     return 0
 

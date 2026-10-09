@@ -10,6 +10,7 @@ dependencies = [
   "boto3>=1.35",
   "aws-opentelemetry-distro>=0.18.0",
   "strands-agents-evals>=1.4.0",
+  "rich>=13",
 ]
 
 [dependency-groups]

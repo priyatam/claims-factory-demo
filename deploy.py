@@ -214,7 +214,7 @@ def deploy() -> None:
         check=True,
     )
     print(f"\nDeployed. Logs: {LOG_GROUP}")
-    print("Omni / GenAI Observability: CloudWatch console (same Region). Then: uv run cli.py img/veh1.jpeg")
+    print("Omni / GenAI Observability: CloudWatch console (same Region). Then: uv run cli.py dataset/img/veh1.jpeg")
 
 
 # Always prepare Omni before synth or deploy. cdk invoke sets CDK_OUTDIR and only synths.

@@ -1,4 +1,4 @@
-"""Download 100 labeled damage photos and write evals/history.
+"""Download 100 labelled damage photos into dataset/history.
 
 Source: Car Front and Rear Damage Detection (DrBimmer/comprehensive-car-damage).
 License: MIT, as stated on the dataset card.
@@ -124,7 +124,7 @@ def build_rows(sources: list[tuple[str, dict]]) -> list[dict]:
                 "dataset_label": source.split("/", 1)[0],
                 "source_file": source,
                 "expected_status": "ok",
-                "false_ok_case": False,
+                "unpriceable": False,
                 "failure_mode": failure_mode,
                 "decoy_low": decoy_low,
                 "decoy_high": decoy_high,
