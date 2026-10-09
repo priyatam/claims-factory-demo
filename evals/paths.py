@@ -1,6 +1,6 @@
-"""Paths the eval scripts read and write under .runtime/. The root is set in claims/eval_log.py."""
+"""Paths the eval scripts read and write under .runtime/. The root is set in claims/telemetry.py."""
 
-from claims.eval_log import OUTCOMES, RUNTIME_ROOT
+from claims.telemetry import OUTCOMES, RUNTIME_ROOT
 
 REPORTS = RUNTIME_ROOT / "reports"
 LABELS = RUNTIME_ROOT / "labels.jsonl"

@@ -149,7 +149,7 @@ async def _chunks(payload):
 
 def test_runtime_log_is_off_unless_enabled(monkeypatch, tmp_path: Path):
     dest = tmp_path / "outcomes.jsonl"
-    monkeypatch.setattr("claims.eval_log.OUTCOMES", dest)
+    monkeypatch.setattr("claims.telemetry.OUTCOMES", dest)
     monkeypatch.setattr(
         "claims.agent.run_claim_with_agent",
         lambda *_a, **_k: {"claim_id": "x", "status": "unreadable", "estimate": None},

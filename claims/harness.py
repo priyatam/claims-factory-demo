@@ -1,4 +1,9 @@
-"""Fixed Strands harness: triage → read → validate."""
+"""The harness core: one fixed Strands agent (triage → read → validate) and the helpers to run a claim.
+
+Holds the system and user prompts, builds the agent with its model and partner tools, shapes a
+photograph into model content, runs one claim, and turns the answer into a typed record. It has
+no AgentCore code; claims/agent.py is the runtime entrypoint that calls it.
+"""
 
 from __future__ import annotations
 
@@ -16,10 +21,34 @@ MODEL_ID = "us.anthropic.claude-sonnet-4-6"
 
 _FORMAT = {"image/jpeg": "jpeg", "image/png": "png", "image/webp": "webp"}
 
+SYSTEM_PROMPT = """\
+You assess one photograph for an auto insurance claim.
+Order on every claim: triage, then read, then validate with tools.
+Do not invent partner facts. A tool null stays null.
+When the photograph cannot support a price, status is not_a_vehicle or unreadable
+and estimate is null. Reply with JSON only, no markdown."""
+
+USER_PROMPT = """\
+Return only a JSON object, no markdown, with this shape:
+{
+  "status": "ok" or "not_a_vehicle" or "unreadable",
+  "vehicle": {"make": string or null, "model": string or null, "colour": string or null, "confidence": number or null},
+  "plate": {"value": string or null, "confidence": number or null},
+  "damage": {"summary": string, "parts": [string], "severity": "minor" or "moderate" or "severe"},
+  "estimate": {"low": integer, "high": integer, "currency": "USD", "assumptions": [string], "confidence": number},
+  "partner_facts": {"policy": object or null, "loss_history": object or null, "estimating": object or null}
+}
+
+Rules:
+- Triage first: not_a_vehicle when not a vehicle; unreadable when too unclear.
+- status ok only with a one-sentence damage summary, for example "left rear bumper dent with scratching".
+- estimate is a visual USD range (low <= high, at least one assumption), not a repair quote.
+- plate.value null unless clearly readable. Null make/model/colour when unknown.
+- Call partner tools before finalizing when status is ok.
+"""
+
 
 def build_agent() -> Agent:
-    from claims.agent import SYSTEM_PROMPT
-
     return Agent(
         model=MODEL_ID,
         system_prompt=SYSTEM_PROMPT,
@@ -33,8 +62,6 @@ def image_format(media_type: str) -> str | None:
 
 
 def content_for(image: bytes, media_type: str) -> list[dict[str, Any]] | None:
-    from claims.agent import USER_PROMPT
-
     fmt = image_format(media_type)
     if fmt is None:
         return None

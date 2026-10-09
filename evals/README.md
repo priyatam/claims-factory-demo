@@ -40,7 +40,7 @@ The 0.6, 1.0, 0.05, and the e2e 0.80 floor are proposals, set as constants at th
 | `dataset/history/` | Evaluation set: `claims.jsonl` and `images/` (100 labelled photos). Tracked. |
 | `dataset/img/` | Sample claim photos. Tracked. |
 | `.runtime/` | Generated logs and reports. Gitignored. |
-| `evals/paths.py` | Every generated path, defined once. The root is in `claims/eval_log.py`. |
+| `evals/paths.py` | Every generated path, defined once. The root is in `claims/telemetry.py`. |
 | `evals/phases/` | `preprod.py`, `runtime.py`, `postprod_report.py`: one script per phase. |
 | `evals/e2e.py` | The end-to-end run over all three phases. |
 | `evals/score.py`, `evaluators.py` | Scorers, and their Strands evaluator wrappers plus the LLM judge. |

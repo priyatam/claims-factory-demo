@@ -10,12 +10,15 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import hmac
 import json
 import os
 import uuid
+from pathlib import Path
 
-from claims.gate import policy_ok
+from claims.claim import media_type
 
+MAX_CODE = 10
 MAX_IMAGE = 3 * 1024 * 1024
 MAX_BODY = MAX_IMAGE * 4 // 3 + 1024  # base64 of the largest photo, plus the JSON around it
 
@@ -24,79 +27,12 @@ ERROR = (
     "Try again after a few days."
 )
 
-STYLE = """
-body { font: 16px/1.45 system-ui, sans-serif; margin: 2rem auto; max-width: 40rem; padding: 0 1rem; }
-label { display: block; margin: 0.8rem 0 0.25rem; }
-button { margin-top: 1rem; }
-pre { white-space: pre-wrap; }
-.note { color: #444; }
-"""
-
-SCRIPT = """
-const MAX = 3 * 1024 * 1024;
-const ERROR = __ERROR__;
-const out = document.getElementById("out");
-const go = document.getElementById("go");
-
-function show(claim) {
-  const lines = ["Status: " + claim.status];
-  const damage = claim.damage;
-  if (damage && damage.summary) lines.push("Damage: " + damage.summary + (damage.severity ? " (" + damage.severity + ")" : ""));
-  const estimate = claim.estimate;
-  if (estimate && estimate.low != null) {
-    lines.push("Estimate: " + estimate.low + " to " + estimate.high + " " + (estimate.currency || "") + ", confidence " + estimate.confidence);
-  } else {
-    lines.push("No estimate: this photo could not be priced.");
-  }
-  return lines.join("\\n");
-}
-
-document.getElementById("claim").onsubmit = async (event) => {
-  event.preventDefault();
-  const file = document.getElementById("file").files[0];
-  if (!file || file.size > MAX) { out.textContent = ERROR; return; }
-  go.disabled = true;
-  out.textContent = "Assessing...";
-  try {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    let binary = "";
-    for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-    const response = await fetch("/", {
-      method: "POST",
-      headers: {"content-type": "application/json"},
-      body: JSON.stringify({policy: document.getElementById("policy").value, image_b64: btoa(binary)}),
-    });
-    if (!response.ok) throw new Error("rejected");
-    out.textContent = show(await response.json());
-  } catch (_) {
-    out.textContent = ERROR;
-  }
-  go.disabled = false;
-};
-""".replace("__ERROR__", json.dumps(ERROR))
-
-PAGE = f"""<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vehicle claim</title>
-<style>{STYLE}</style>
-</head>
-<body>
-<h1>Vehicle claim</h1>
-<p class="note">One photo, 3 MB or less. The cost is a visual range, not a settlement offer.</p>
-<form id="claim">
-  <label for="policy">Policy code</label>
-  <input id="policy" type="password" maxlength="10" autocomplete="off" required>
-  <label for="file">Photo (JPEG, PNG, or WebP)</label>
-  <input id="file" type="file" accept="image/jpeg,image/png,image/webp" required>
-  <button id="go" type="submit">Submit</button>
-</form>
-<pre id="out"></pre>
-<script>{SCRIPT}</script>
-</body>
-</html>"""
+# The page, its style, and its script live in claims/web. They are inlined so the content
+# security policy can pin each by hash and the page needs no other route.
+WEB = Path(__file__).parent / "web"
+STYLE = (WEB / "style.css").read_text(encoding="utf-8")
+SCRIPT = (WEB / "app.js").read_text(encoding="utf-8").replace("__ERROR__", json.dumps(ERROR))
+PAGE = (WEB / "index.html").read_text(encoding="utf-8").replace("{{STYLE}}", STYLE).replace("{{SCRIPT}}", SCRIPT)
 
 
 def _sha256(text: str) -> str:
@@ -117,14 +53,14 @@ HEADERS = {
 }
 
 
-def _media_type(data: bytes) -> str | None:
-    if data.startswith(b"\xff\xd8\xff"):
-        return "image/jpeg"
-    if data.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "image/png"
-    if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
-        return "image/webp"
-    return None
+def policy_ok(submitted: object) -> bool:
+    """True only when the submitted code equals POLICY_CODE_ADMIN. Fails closed; never logs either value."""
+    expected = os.environ.get("POLICY_CODE_ADMIN", "")
+    if not expected or len(expected) > MAX_CODE:
+        return False
+    if not isinstance(submitted, str) or not submitted or len(submitted) > MAX_CODE:
+        return False
+    return hmac.compare_digest(submitted.encode(), expected.encode())
 
 
 def _parse(event: dict) -> dict | None:
@@ -164,7 +100,7 @@ def handler(event, _context, invoke=None):
     if body is None or not policy_ok(body.get("policy")):
         return _reply(400, ERROR)
     image = _decode(body.get("image_b64"))
-    kind = _media_type(image) if image else None
+    kind = media_type(image) if image else None
     if kind is None:
         return _reply(400, ERROR)
     try:

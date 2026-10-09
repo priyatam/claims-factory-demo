@@ -2,7 +2,7 @@
 
 import json
 
-from claims.eval_log import record_outcome
+from claims.telemetry import record_outcome
 from evals.phases.runtime import main, summarize, triage
 
 
@@ -67,7 +67,7 @@ def test_main_writes_report(tmp_path, capsys):
 
 def test_record_outcome_adds_timestamp_without_photo(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAIMS_EVAL_LOG", "1")
-    monkeypatch.setattr("claims.eval_log.OUTCOMES", tmp_path / "o.jsonl")
+    monkeypatch.setattr("claims.telemetry.OUTCOMES", tmp_path / "o.jsonl")
     record_outcome({**ok(), "image_b64": "xx"})
     row = json.loads((tmp_path / "o.jsonl").read_text())
     assert "logged_at" in row and "image_b64" not in row and row["claim_id"] == "c1"

@@ -9,7 +9,7 @@ import pytest
 from rich.console import Console
 
 import cli
-from claims.eval_log import record_outcome
+from claims.telemetry import record_outcome
 from evals import e2e
 
 PREPROD = {

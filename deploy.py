@@ -81,8 +81,9 @@ def stage() -> Path:
         check=True,
     )
     shutil.copytree(ROOT / "claims", BUILD / "claims", dirs_exist_ok=True)
-    for name in ("web.py", "vision.py"):
+    for name in ("localhost.py", "public.py"):
         (BUILD / "claims" / name).unlink(missing_ok=True)
+    shutil.rmtree(BUILD / "claims" / "web", ignore_errors=True)
     for junk in (BUILD / "claims").rglob("__pycache__"):
         shutil.rmtree(junk, ignore_errors=True)
     # AgentCore EntryPoint allows at most two items: the ADOT wrapper, then this file.
@@ -175,14 +176,15 @@ def build_app() -> cdk.App:
 
 
 def _public_asset() -> Path:
-    """Zip only the public page and the policy check. The Lambda runtime already has boto3."""
+    """Zip the public page, the image check it shares with the runtime, and its web files. Lambda already has boto3."""
     dest = ROOT / ".public"
     package = dest / "claims"
     shutil.rmtree(dest, ignore_errors=True)
     package.mkdir(parents=True)
     (package / "__init__.py").write_text("", encoding="utf-8")
-    for name in ("public.py", "gate.py"):
+    for name in ("public.py", "claim.py"):
         shutil.copy(ROOT / "claims" / name, package / name)
+    shutil.copytree(ROOT / "claims" / "web", package / "web")
     return dest
 
 

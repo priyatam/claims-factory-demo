@@ -75,12 +75,14 @@ Each phase also runs on its own; the design of each is linked.
 - **Runtime** ([`evals/phases/runtime.py`](evals/phases/runtime.py)) needs `CLAIMS_EVAL_LOG=1` on the machine that runs the harness, which appends each claim, without the photo, to `.runtime/outcomes.jsonl`. It flags claims that were not read, had no estimate, or had low confidence or a wide range. It does not call a model.
 - **Post-prod** ([`evals/phases/postprod_report.py`](evals/phases/postprod_report.py)) needs the adjuster's kept values saved as `.runtime/labels.jsonl`, one row per line with `claim_id`, `severity`, `dataset_label` or `parts`, and optionally `kept_dollars`. It prints a table comparing post-prod rates with the pre-prod report and lists the claims the adjuster corrected. The log keeps no photographs, so if a metric regressed, attach the image file for each listed claim and add the rows to `dataset/history/claims.jsonl` before the next release.
 
-## Local FastAPI with direct call to Claude (optional)
+## Local test server for direct Claude testing (optional)
+
+`claims/localhost.py` is a small local page for trying the model on a photo with no AWS infrastructure. It calls Claude directly with your Anthropic API key, so it skips AgentCore, Bedrock, API Gateway, and Lambda, and it has no policy code. It is for testing only: it listens on 127.0.0.1 and `deploy.py` leaves it out of the deployed zip.
 
 ```sh
 uv sync --all-groups
 export ANTHROPIC_API_KEY=your-key
-uv run python -m claims.web    # http://127.0.0.1:8080
+uv run python -m claims.localhost    # http://127.0.0.1:8080
 ```
 
 ## Public upload page
@@ -91,3 +93,18 @@ uv run python -m claims.web    # http://127.0.0.1:8080
 export POLICY_CODE_ADMIN='<code, 10 characters or fewer>'
 uv run deploy.py
 ```
+
+## Costs
+
+Rough guesses at US list prices, not a quote; check current AWS pricing before relying on them. **Partner data integration (policy, loss history, estimating) is not included**: the partner tools are stubs today, and a real provider charges its own fees on top.
+
+| Item | 100 live claims | 100 images, one pre-prod eval run |
+| --- | --- | --- |
+| Claude Sonnet 4.6 on Bedrock, the claim answers | about $3.00 | about $3.00 |
+| Claude judge call per photo, evals only | none | about $0.60 |
+| AgentCore Runtime compute | about $0.10 | none (eval runs the harness on your machine) |
+| API Gateway and Lambda | under $0.02 | none |
+| CloudWatch logs and traces | under $0.05 | none |
+| **Total** | **about $3.20** | **about $3.60** |
+
+The stack costs close to nothing when unused, apart from a little CloudWatch log storage.

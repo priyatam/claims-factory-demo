@@ -42,7 +42,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from claims.images import media_type
+from claims.claim import media_type
 from evals.phases import postprod_report as post
 from evals.phases import runtime as rt
 from evals.paths import E2E_DIR as OUT_DIR, E2E_REPORT as REPORT, PREPROD
@@ -278,7 +278,7 @@ def captured_logs(log_file: Path, verbose: bool):
 def local_invoke(payload: dict) -> dict:
     """One claim through the harness in this process, as claims/agent.py invoke does."""
     from claims.agent import get_agent, load_image
-    from claims.eval_log import record_outcome
+    from claims.telemetry import record_outcome
     from claims.harness import run_claim_with_agent
 
     image = load_image(payload)

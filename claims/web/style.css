@@ -1,0 +1,6 @@
+
+body { font: 16px/1.45 system-ui, sans-serif; margin: 2rem auto; max-width: 40rem; padding: 0 1rem; }
+label { display: block; margin: 0.8rem 0 0.25rem; }
+button { margin-top: 1rem; }
+pre { white-space: pre-wrap; }
+.note { color: #444; }

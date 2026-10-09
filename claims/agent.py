@@ -1,6 +1,9 @@
-"""Claims Strands harness for AgentCore Runtime.
+"""AgentCore Runtime entrypoint: the adapter around the harness in claims/harness.py.
 
-    uv run python -m claims.agent
+    uv run python -m claims.agent   # same entrypoint locally, on :8080
+
+Loads the photograph from the payload (or fetches a public URL), runs one claim through the
+harness, records the outcome, and returns the claim JSON.
 
 Payloads:
     {"image_b64": "...", "media_type": "image/jpeg"}
@@ -10,39 +13,11 @@ Payloads:
 
 from __future__ import annotations
 
-SYSTEM_PROMPT = """\
-You assess one photograph for an auto insurance claim.
-Order on every claim: triage, then read, then validate with tools.
-Do not invent partner facts. A tool null stays null.
-When the photograph cannot support a price, status is not_a_vehicle or unreadable
-and estimate is null. Reply with JSON only, no markdown."""
-
-USER_PROMPT = """\
-Return only a JSON object, no markdown, with this shape:
-{
-  "status": "ok" or "not_a_vehicle" or "unreadable",
-  "vehicle": {"make": string or null, "model": string or null, "colour": string or null, "confidence": number or null},
-  "plate": {"value": string or null, "confidence": number or null},
-  "damage": {"summary": string, "parts": [string], "severity": "minor" or "moderate" or "severe"},
-  "estimate": {"low": integer, "high": integer, "currency": "USD", "assumptions": [string], "confidence": number},
-  "partner_facts": {"policy": object or null, "loss_history": object or null, "estimating": object or null}
-}
-
-Rules:
-- Triage first: not_a_vehicle when not a vehicle; unreadable when too unclear.
-- status ok only with a one-sentence damage summary, for example "left rear bumper dent with scratching".
-- estimate is a visual USD range (low <= high, at least one assumption), not a repair quote.
-- plate.value null unless clearly readable. Null make/model/colour when unknown.
-- Call partner tools before finalizing when status is ok.
-"""
-
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
-from claims.claim import empty_result
-from claims.eval_log import record_outcome
+from claims.claim import empty_result, fetch_image
 from claims.harness import build_agent, decode_payload_image, harness_state, run_claim_with_agent
-from claims.images import fetch_image
-from claims.telemetry import configure_telemetry
+from claims.telemetry import configure_telemetry, record_outcome
 
 app = BedrockAgentCoreApp()
 _agent = None

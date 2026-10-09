@@ -21,7 +21,7 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
-from claims.images import media_type
+from claims.claim import media_type
 
 STACK_NAME = "ClaimsFactoryHarness"
 
