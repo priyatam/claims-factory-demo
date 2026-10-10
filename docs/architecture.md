@@ -286,3 +286,8 @@ Unusual inputs and operational boundaries. When the photo is not a vehicle, cann
 4. **Low light or poor capture.** Lighting, blur, or angle limits identity or damage read — partial nulls rather than a forced range.
 5. **Partner timeout or null.** A Data Plane MCP call times out or returns null; null stays on the claim — no invented fill.
 
+## Reading a claim's trace
+
+`uv run cli.py --otel-logs` prints the newest claim run, whether it came from the page or the command line; `--claim-id <id>` prints one claim (the page shows each claim's id), and says "No logs found... try again" when its records have not arrived. Output starts with `datetime`, when the run began in US Pacific time, then the claim record rebuilt from the model's final answer. A `trace_summary` follows with the trace and session ids, model id, tokens and duration, each model call (time, tokens, finish reason), and each tool called (time, status). `--full` adds every span and log record, with photo bytes replaced by their length.
+
+It reads CloudWatch only (`logs:GetLogEvents` and `logs:FilterLogEvents` on the runtime log group and `aws/spans`) and calls no model. The newest records can take a minute to arrive. Treat the dump and the log groups as sensitive: partner tools receive the licence plate the model reads, so a plate can appear in the tool log records.

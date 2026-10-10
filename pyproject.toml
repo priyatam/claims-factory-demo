@@ -14,12 +14,6 @@ dependencies = [
 ]
 
 [dependency-groups]
-# Local FastAPI UI (optional). Left out of the AgentCore code zip.
-local = [
-  "fastapi>=0.115",
-  "python-multipart>=0.0.12",
-  "uvicorn>=0.32",
-]
 # Only for deploy.py and tests on the machine running cdk.
 dev = [
   "pytest>=8",
@@ -30,4 +24,5 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = ["prod: calls the deployed stack and real Bedrock; the unit-test gate is off for it"]
 norecursedirs = [".venv", "cdk.out", ".build", ".*"]

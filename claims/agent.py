@@ -1,9 +1,18 @@
 """AgentCore Runtime entrypoint: the adapter around the harness in claims/harness.py.
 
-    uv run python -m claims.agent   # same entrypoint locally, on :8080
-
 Loads the photograph from the payload (or fetches a public URL), runs one claim through the
 harness, records the outcome, and returns the claim JSON.
+
+Locally, `uv run python -m claims.localhost` serves the upload page on top of this same app. It
+still calls Amazon Bedrock through the harness (MODEL_ID, your AWS credentials), exactly as the
+deployed runtime does; only the hosting differs. It does not call AgentCore Runtime, so there is no
+per-session microVM isolation, no SigV4 caller check, and no CloudWatch trace, which means
+`cli.py --otel-logs` and `--claim-id` will not find a local claim. Results resemble the runtime's,
+not match them exactly, because the model is not deterministic.
+
+`uv run python -m claims.agent` serves only the API on :8080 until stopped and prints nothing at
+startup. It listens on all interfaces (0.0.0.0) with no authentication, so use it only on a trusted
+network. Check it with `curl http://127.0.0.1:8080/ping`; send a claim with a POST to /invocations.
 
 Payloads:
     {"image_b64": "...", "media_type": "image/jpeg"}
@@ -59,19 +68,17 @@ def load_image(payload: dict) -> tuple[bytes, str] | None:
     return None
 
 
-@app.entrypoint
-async def invoke(payload: dict):
+def run_payload(payload: dict) -> dict:
+    """One request in, one claim out. The entrypoint and claims/localhost.py both call this."""
     if payload.get("command") == "state":
-        yield harness_state(get_agent())
-        return
+        return harness_state(get_agent())
 
     claim_id = payload["claim_id"] if isinstance(payload.get("claim_id"), str) else uuid.uuid4().hex
     image = load_image(payload)
     if image is None:
         result = empty_result(claim_id, "unreadable")
         record_outcome(result)
-        yield result
-        return
+        return result
     # The claim id is the correlation id: the page shows it, and `cli.py --claim-id` finds the trace by it.
     # The log record always reaches CloudWatch with this trace's id; the span only does when the trace is sampled.
     agent = get_agent()
@@ -82,7 +89,12 @@ async def invoke(payload: dict):
         summary = run_summary(claim_id, MODEL_ID, before, metrics_snapshot(agent), time.monotonic() - started)
         log.info("%s%s", SUMMARY_PREFIX, json.dumps(summary))
     record_outcome(result)
-    yield result
+    return result
+
+
+@app.entrypoint
+async def invoke(payload: dict):
+    yield run_payload(payload)
 
 
 if __name__ == "__main__":

@@ -7,8 +7,6 @@ from claims.claim import (
     json_from_model,
     media_type,
     public_url,
-    redact,
-    run_claim,
 )
 
 OK = {
@@ -80,18 +78,6 @@ def test_fenced_json():
     text = "```json\n" + json.dumps({"status": "not_a_vehicle"}) + "\n```"
     result = assessment_from_model(json_from_model(text), "c1")
     assert result["status"] == "not_a_vehicle"
-
-
-def test_garbage_text_is_unreadable():
-    assert run_claim(b"img", "image/jpeg", lambda _image, _kind: "not json", "c1")["status"] == "unreadable"
-
-
-def test_redact_drops_plate_characters_and_keeps_confidence():
-    result = assessment_from_model(OK, "c1")
-    hidden = redact(result)
-    assert hidden["plate"]["value"] is None
-    assert hidden["plate"]["confidence"] == 0.7
-    assert result["plate"]["value"] == "ABC123"
 
 
 # --- Photo intake ---

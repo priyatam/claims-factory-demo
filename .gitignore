@@ -52,3 +52,6 @@ cdk.context.json
 
 # Local slide deck
 docs/presentation.html
+
+# Archived code kept for reference
+.backup/

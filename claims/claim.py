@@ -167,18 +167,6 @@ def assessment_from_model(payload: dict, claim_id: str) -> ClaimResult:
     }
 
 
-def redact(result: ClaimResult) -> ClaimResult:
-    return {**result, "plate": {**result["plate"], "value": None}}
-
-
-def run_claim(image: bytes, media_type: str, assess: Callable[[bytes, str], str], claim_id: str) -> ClaimResult:
-    try:
-        payload = json_from_model(assess(image, media_type))
-    except (ValueError, TypeError):
-        return empty_result(claim_id, "unreadable")
-    return assessment_from_model(payload, claim_id)
-
-
 # --- Photo intake: image type, public-URL check, and fetch ---
 
 MAX_BYTES = 5 * 1024 * 1024

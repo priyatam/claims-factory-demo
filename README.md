@@ -1,26 +1,24 @@
 # Claims Factory Overview
 
-This project takes one photograph of a damaged vehicle and returns a typed estimate: make, model, colour, a damage summary, and a rough repair-cost range. An adjuster reviews that result and decides whether to accept or correct it, and the software does not authorize payment. The running system is a Strands harness on Amazon Bedrock AgentCore Runtime, a fixed path of prompt, tools, and stop, deployed as a code zip and invoked with AWS Signature Version 4. The models are the Claude Sonnet family, and the model id can be swapped. Each session runs in its own microVM, partner tools are a fixed allowlist, and logs and traces are vended to CloudWatch.
+This agentic project takes one photograph of a damaged vehicle and returns a typed estimate: make, model, colour, a damage summary, and a rough repair-cost range. An adjuster reviews that result and decides whether to accept or correct it, and the software does not authorize payment. The running system is a Strands harness on Amazon Bedrock AgentCore Runtime, a fixed path of prompt, tools, and stop, deployed as a code zip and invoked with AWS Signature Version 4. The models are the Claude Sonnet family, and the model id can be swapped. Each session runs in its own microVM, partner tools are a fixed allowlist, and logs and traces are vended to CloudWatch.
 
-Documentation:
+## Vision
 
-- [Requirements](docs/requirements.md)
-- [Architecture](docs/architecture.md)
-- [MIT License](LICENSE)
+![A claims software factory: agents on the line, one evolving harness underneath](docs/claims-factory-vision.jpg)
 
-![Claims factory](docs/claims-factory.jpg)
+## Documentation
 
-## Prerequisites
+- [Requirements](docs/requirements.md): what the customer asked for and how this answers it
+- [Architecture](docs/architecture.md): how it works: design, security, evaluation, and trace reading
+- [Evals](evals/README.md): running the evaluations
+
+## Setup
 
 - **Python 3.12.x** and [uv](https://docs.astral.sh/uv/)
-- **Node.js** (for `npx aws-cdk`)
-- **AWS CLI** configured with an access key and secret key (or another credential source) for the target account and Region (default `us-west-2`)
-- IAM principal as admin (non prod) or able to:
-  - **Amazon Bedrock** — `InvokeModel` / converse on the inference profile in use (default `us.anthropic.claude-sonnet-4-6`)
-  - **Bedrock AgentCore** — create and invoke AgentCore Runtime (deploy + `cli.py`)
-  - **AgentCore Gateway** — when partner MCP via Gateway is wired (not required for the current stub tools)
-  - **CloudFormation / CDK / IAM / CloudWatch Logs / X-Ray** — for `deploy.py` (stack, roles, Transaction Search → Omni)
-- **AWS Marketplace** — Claude access is per model. Run `[scripts/enable_claude.py](scripts/enable_claude.py)` once. Pass the **foundation model** id (`claude-sonnet-4-6 or other model ids`); the harness calls the **US inference profile** (`us.anthropic.claude-sonnet-4-6`). A Marketplace agreement of AVAILABLE does not mean this always works: this account is denied  at account level sometimes from aws.
+- **Node.js**, for `npx aws-cdk`
+- **AWS CLI** configured for the target account and Region (default `us-west-2`). Admin access is simplest for a non-production account; otherwise the principal needs Bedrock invoke on the inference profile, AgentCore Runtime create and invoke, and CloudFormation, CDK, IAM, CloudWatch Logs and X-Ray for `deploy.py`.
+
+Claude access is granted per model in AWS Marketplace. Run this once; the harness calls the US inference profile `us.anthropic.claude-sonnet-4-6`:
 
 ```sh
 uv run scripts/enable_claude.py \
@@ -30,88 +28,94 @@ uv run scripts/enable_claude.py \
   --model anthropic.claude-sonnet-4-6
 ```
 
+An agreement marked AVAILABLE does not always mean the model works; AWS can still deny the account.
 
+## Run locally
 
-## Deploy on AWS Bedrock AgentCore
-
-Strands harness (triage → read → validate) on Bedrock AgentCore Runtime. Model: `us.anthropic.claude-sonnet-4-6`.
+The harness runs in your own process and still calls Amazon Bedrock with your AWS credentials, through the same `claims/agent.py` that AgentCore runs. There is no AgentCore Runtime, no isolation between claims, and no CloudWatch trace.
 
 ```sh
 uv sync --all-groups
-npx aws-cdk bootstrap          # once per account and Region, from this directory
-uv run deploy.py               # Omni/Transaction Search + stack (idempotent)
-uv run cli.py dataset/img/veh1.jpeg          # add --json for raw JSON
-uv run cli.py --otel-logs                    # claim record, then a summary of the last run, from the page or the CLI
-uv run cli.py --claim-id <id>                # the same for one claim; the page shows each claim's id
-uv run cli.py --otel-logs --full             # the same plus every span and log record
 uv run pytest
-npx aws-cdk destroy
-```
-
-The idempotent `deploy.py` enables CloudWatch Transaction Search, deploys the AgentCore code zip with tracing, and sends application/usage logs to `/aws/vendedlogs/bedrock-agentcore/ClaimsFactoryHarness`. Local harness: `uv run python -m claims.agent`. After redeploy, GenAI Observability on that runtime shows the harness spans.
-
-**See logs / Omni:** CloudWatch (same Region) → GenAI Observability or Omni → AgentCore; Log groups → `ClaimsFactoryHarness`.
-
-**Dump a trace:** `uv run cli.py --otel-logs` prints JSON for the newest claim run, whether it came from the page or the CLI; `--claim-id <id>` does the same for one claim (the runtime tags each trace with the claim id the page shows), and says "No logs found... try again" when its spans have not arrived. It starts with `datetime`, when the run began in US Pacific time (PDT in summer, PST in winter), then the claim record, rebuilt from the model's final answer (the trace id stands in for the claim id). A `trace_summary` follows with the trace and session ids, the model id, tokens and duration, each model call (time, tokens, finish reason), and each tool called (time, status). Add `--full` for every span and every model and tool log record, with photo bytes replaced by their length. It reads CloudWatch only (`logs:GetLogEvents` and `logs:FilterLogEvents` on the runtime log group and `aws/spans`) and calls no model. The newest spans can take a minute to arrive. Treat the dump and the log groups as sensitive: the partner tools receive the licence plate the model reads, so a plate can appear in the tool log records.
-
-## Evals
-
-The evals score Claude's written answers; they do not retrain Claude. The default is one end-to-end run that covers pre-prod, runtime, and post-prod and ends with a decision table for the operator and the adjuster.
-
-```sh
-uv run python evals/e2e.py --live
-```
-
-`--live` calls Bedrock: it scores the photographs in `dataset/history/images`, sends the sample claim `dataset/img/veh2.jpg` through the harness, triages the logged claim, and compares a simulated adjuster label with the pre-prod result. Without `--live` it calls no model. Add `--limit N` to score only N photographs, or `--skip-preprod` to reuse `.runtime/reports/preprod.json`. Output goes to `.runtime/reports/e2e.md`. More in [evals/README.md](evals/README.md#end-to-end-run); the design is in [docs/architecture.md#evaluation](docs/architecture.md#evaluation).
-
-The photographs are from the Hugging Face dataset Car Front and Rear Damage Detection, [DrBimmer/comprehensive-car-damage](https://huggingface.co/datasets/DrBimmer/comprehensive-car-damage). The dataset card states an MIT license. Make, model, and colour are not in that set, so identity is not scored. The dollar amounts in `dataset/history/claims.jsonl` were not part of the dataset. `uv run python dataset/fetch_history.py` re-downloads the slice. How the evaluation questions land on this slice is answered once in the [Eval FAQ](docs/architecture.md#eval-faq).
-
-### Run one phase
-
-Each phase also runs on its own; the design of each is linked.
-
-| Phase | Command | Reads | Writes | Design |
-| --- | --- | --- | --- | --- |
-| Pre-prod | `uv run python evals/phases/preprod.py --live` | `dataset/history/images`, `dataset/history/claims.jsonl` | `.runtime/reports/preprod.json`, `.runtime/reports/report.md` | [Pre-prod](docs/architecture.md#pre-prod) |
-| Runtime | `uv run python evals/phases/runtime.py` | `.runtime/outcomes.jsonl` | `.runtime/reports/runtime.md` | [Runtime](docs/architecture.md#runtime) |
-| Post-prod | `uv run python evals/phases/postprod_report.py` | `.runtime/outcomes.jsonl`, `.runtime/labels.jsonl`, `.runtime/reports/preprod.json` | `.runtime/reports/postprod.md`, `.runtime/corrections.jsonl` | [Post-prod](docs/architecture.md#post-prod) |
-
-- **Pre-prod** ([`evals/phases/preprod.py`](evals/phases/preprod.py)) sends every photograph to the claims harness and scores the answer. Damage location and severity use the dataset labels: front or rear, and breakage (moderate) or crushed (severe). Safe pricing fails when the answer has status `ok` with an estimate but the expected label says the photo should not be priced. Saved answers are reused unless you pass `--refresh`.
-- **Runtime** ([`evals/phases/runtime.py`](evals/phases/runtime.py)) needs `CLAIMS_EVAL_LOG=1` on the machine that runs the harness, which appends each claim, without the photo, to `.runtime/outcomes.jsonl`. It flags claims that were not read, had no estimate, or had low confidence or a wide range. It does not call a model.
-- **Post-prod** ([`evals/phases/postprod_report.py`](evals/phases/postprod_report.py)) needs the adjuster's kept values saved as `.runtime/labels.jsonl`, one row per line with `claim_id`, `severity`, `dataset_label` or `parts`, and optionally `kept_dollars`. It prints a table comparing post-prod rates with the pre-prod report and lists the claims the adjuster corrected. The log keeps no photographs, so if a metric regressed, attach the image file for each listed claim and add the rows to `dataset/history/claims.jsonl` before the next release.
-
-## Local test server for direct Claude testing (optional)
-
-`claims/localhost.py` is a small local page for trying the model on a photo with no AWS infrastructure. It calls Claude directly with your Anthropic API key, so it skips AgentCore, Bedrock, API Gateway, and Lambda, and it has no policy code. It is for testing only: it listens on 127.0.0.1 and `deploy.py` leaves it out of the deployed zip.
-
-```sh
-uv sync --all-groups
-export ANTHROPIC_API_KEY=your-key
 uv run python -m claims.localhost    # http://127.0.0.1:8080
 ```
 
-## Public upload page
+Open the page, upload a photo, and type the policy code `local` (or your `POLICY_CODE_ADMIN`). It is the same page, size limit, and checks as the deployed one, and the result appears in the claim record box. The same server also answers `curl http://127.0.0.1:8080/ping`.
 
-`uv run deploy.py` also publishes a page on an API Gateway URL (stack output `PublicUrl`). Anyone with the URL can upload one photo of 3 MB or less with a policy code of up to 10 characters and see the result on the same page, in a claim record box, which includes the claim id the runtime mints and tags on the claim's trace; `uv run cli.py --claim-id <id>` reads that trace. The AgentCore runtime is called only when the code equals `POLICY_CODE_ADMIN`, and every failure shows the same apology message. Set the code in the deploy shell, or as `POLICY_CODE_ADMIN=...` in the gitignored `.env` (repo root or `claims/`), and keep it out of the repo. If neither has it, `deploy.py` prints an `ERROR` line before and after the deploy and the page rejects every submit.
+`uv run python -m claims.agent` serves only the API (`/invocations`, `/ping`) on :8080. It prints nothing and runs until you stop it; a claim is a POST to `/invocations` with `image_b64` and `media_type`.
+
+To preview the page with no AWS and no model call, run `uv run python scripts/preview_page.py` (http://127.0.0.1:8081, policy code `preview`).
+
+## Run on AWS
+
+The same code now runs in Bedrock AgentCore Runtime, under a different security and isolation model: each session gets its own microVM, the runtime uses an IAM role limited to the one model profile, callers sign requests with AWS Signature Version 4, and logs and traces go to CloudWatch. `deploy.py` also publishes a public upload page on API Gateway (stack output `PublicUrl`) for one photo of 3 MB or less; only the code in `POLICY_CODE_ADMIN` reaches the runtime. Set it in the deploy shell or in the gitignored `.env`; `deploy.py` prints an `ERROR` line if it is missing.
 
 ```sh
-export POLICY_CODE_ADMIN='<code, 10 characters or fewer>'
-uv run deploy.py
+npx aws-cdk bootstrap                        # once per account and Region
+export POLICY_CODE_ADMIN='<10 characters or fewer>'
+uv run deploy.py                             # idempotent: enables CloudWatch tracing, then deploys
+uv run cli.py dataset/img/veh1.jpeg          # call the deployed runtime; add --json for raw JSON
+uv run cli.py --otel-logs                    # newest claim's record and trace summary
+uv run cli.py --claim-id <id>                # one claim; the page shows each claim's id
+uv run cli.py --otel-logs --full             # the same plus every span and log record
+npx aws-cdk destroy                          # remove the stack
 ```
 
-To preview just the page on your machine with no AWS, run `uv run python scripts/preview_page.py` and open http://127.0.0.1:8081. It serves the real page and answers a valid submit with a sample claim, so the runtime is never called. Type `preview` as the policy code, or set `POLICY_CODE_ADMIN` first.
+`--otel-logs` and `--claim-id` read CloudWatch only and call no model; the newest records can take a minute to arrive. The output and its sensitivity are described in [Architecture](docs/architecture.md#reading-a-claims-trace). In CloudWatch (same Region), GenAI Observability and the `ClaimsFactoryHarness` log group show the runtime's spans and logs.
+
+## Evals
+
+The evals score Claude's written answers; they do not retrain Claude. One end-to-end run covers pre-prod, runtime, and post-prod and ends with a decision table for the operator and the adjuster:
+
+```sh
+uv run python evals/e2e.py --live                  # calls Bedrock; omit --live to call no model
+uv run python evals/e2e.py --live --limit 10       # score only 10 photographs
+uv run python evals/e2e.py --live --skip-preprod   # reuse .runtime/reports/preprod.json
+```
+
+Output goes to `.runtime/reports/e2e.md`. A result from `--live` on 100 photographs, plus the sample claim `veh2.jpg` (the saved pre-prod answers were reused):
+
+| Phase | Metric | Result | n | Signal |
+| --- | --- | ---: | ---: | --- |
+| Pre-prod | damage_location | 0.94 | 100 | ok |
+| Pre-prod | damage_severity | 0.29 | 100 | below the 0.80 floor |
+| Pre-prod | safe_pricing | 1.00 | 100 | ok |
+| Runtime | status, flagged | ok, no | 1 | ok |
+| Runtime | estimate range, confidence | 3,500 to 7,500 USD, 0.62 | 1 | ok |
+| Post-prod | damage_location, damage_severity vs pre-prod | 0.00, 0.00 | 1 | regressed (one simulated label, indicative only) |
+| Post-prod | safe_pricing vs pre-prod | 1.00 | 1 | ok |
+
+The run's next action is "fix harness": damage_severity is far below the floor. The post-prod rows use a fixed simulated adjuster label, so only their direction means anything.
+
+Each phase also runs on its own:
+
+```sh
+uv run python evals/phases/preprod.py --live       # score every photograph; --refresh after a prompt, tool, or model change
+CLAIMS_EVAL_LOG=1 uv run python -m claims.agent    # log each claim, without the photo, to .runtime/outcomes.jsonl
+uv run python evals/phases/runtime.py              # flag unread, unpriced, low-confidence, or wide-range claims
+uv run python evals/phases/postprod_report.py      # compare with adjuster labels in .runtime/labels.jsonl
+uv run python dataset/fetch_history.py             # re-download the evaluation photographs
+```
+
+Options, inputs, and outputs of each phase are in [evals/README.md](evals/README.md); the design is in [Architecture](docs/architecture.md#evaluation). The photographs come from the MIT-licensed Hugging Face dataset [DrBimmer/comprehensive-car-damage](https://huggingface.co/datasets/DrBimmer/comprehensive-car-damage).
 
 ## Costs
 
 Rough guesses at US list prices, not a quote; check current AWS pricing before relying on them. **Partner data integration (policy, loss history, estimating) is not included**: the partner tools are stubs today, and a real provider charges its own fees on top.
 
-| Item | 100 live claims | 100 images, one pre-prod eval run |
-| --- | --- | --- |
-| Claude Sonnet 4.6 on Bedrock, the claim answers | about $3.00 | about $3.00 |
-| Claude judge call per photo, evals only | none | about $0.60 |
-| AgentCore Runtime compute | about $0.10 | none (eval runs the harness on your machine) |
-| API Gateway and Lambda | under $0.02 | none |
-| CloudWatch logs and traces | under $0.05 | none |
-| **Total** | **about $3.20** | **about $3.60** |
+| Item                                            | 100,000 live claims | 100,000 images, one pre-prod eval run        |
+| ----------------------------------------------- | ------------------- | -------------------------------------------- |
+| Claude Sonnet 4.6 on Bedrock, the claim answers | about $3,000        | about $3,000                                 |
+| Claude judge call per photo, evals only         | none                | about $600                                   |
+| AgentCore Runtime compute                       | about $100          | none (eval runs the harness on your machine) |
+| API Gateway and Lambda                          | under $20           | none                                         |
+| CloudWatch logs and traces                      | under $50           | none                                         |
+| **Total**                                       | **about $3,200**    | **about $3,600**                             |
+
+Measured claims used 3,700 to 5,900 input tokens and about 650 output tokens, which is $0.02 to $0.03 each, or $2,200 to $2,800 per 100,000. The table uses $3,000 to leave room for longer answers and retries. At this volume, request quotas matter more than cost: the public page is throttled to 1 request a second, and an evaluation run is limited by your Bedrock quota, so it takes hours rather than minutes.
 
 The stack costs close to nothing when unused, apart from a little CloudWatch log storage.
+
+## License
+
+[MIT](LICENSE)
